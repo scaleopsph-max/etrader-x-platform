@@ -233,6 +233,40 @@ h3 {
   font-size: 13px;
 }
 
+.urgency-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin: -10px 0 42px;
+  border: 1px solid rgba(255, 159, 46, 0.36);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(255, 48, 48, 0.18), rgba(25, 216, 255, 0.08)),
+    rgba(9, 16, 24, 0.72);
+  box-shadow: 0 20px 58px rgba(0, 0, 0, 0.22);
+  padding: 14px 16px;
+}
+
+.urgency-strip strong {
+  color: var(--orange);
+}
+
+.urgency-strip span {
+  min-width: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.urgency-strip a {
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  padding: 10px 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .deal-card,
 .product-card,
 .pricing-panel,
@@ -335,6 +369,33 @@ h3 {
 
 .product-card strong {
   color: var(--green);
+}
+
+.process-grid article {
+  position: relative;
+  overflow: hidden;
+}
+
+.step-badge {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  margin-bottom: 16px;
+  border: 1px solid rgba(25, 216, 255, 0.4);
+  border-radius: 8px;
+  background: rgba(25, 216, 255, 0.12);
+  color: var(--cyan);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.proof-stack {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  padding: 20px;
 }
 
 .split {
@@ -826,8 +887,17 @@ textarea {
   .product-grid,
   .reason-grid,
   .buy-grid,
+  .urgency-strip,
   .approval-card {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .urgency-strip {
+    align-items: stretch;
+  }
+
+  .urgency-strip span {
+    grid-column: 1 / -1;
   }
 
   .portal-sidebar {
@@ -928,6 +998,10 @@ textarea {
     padding-inline: 12px;
   }
 
+  .site-header .header-actions .ghost-btn {
+    display: none;
+  }
+
   .product-grid,
   .reason-grid,
   .pricing-row,
@@ -935,6 +1009,7 @@ textarea {
   .content-grid,
   .buy-grid,
   .form-grid,
+  .urgency-strip,
   .approval-card {
     grid-template-columns: 1fr;
   }
@@ -1001,6 +1076,30 @@ textarea {
   .portal-hero h1,
   .auth-landing h1 {
     font-size: 34px;
+  }
+
+  .hero-section {
+    min-height: auto;
+    padding: 34px 0 28px;
+  }
+
+  .hero-section h1 {
+    font-size: 39px;
+  }
+
+  .hero-lead {
+    font-size: 16px;
+  }
+
+  .urgency-strip {
+    margin: 0 0 28px;
+  }
+
+  .urgency-strip a {
+    display: inline-flex;
+    min-height: 46px;
+    align-items: center;
+    justify-content: center;
   }
 
   .row {
