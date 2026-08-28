@@ -125,6 +125,12 @@
               <button class="secondary-btn wide" type="button">Copy Client ID</button>
             </article>
           </div>
+          <article class="panel order-panel">
+            <h3>Notifications</h3>
+            <div data-client-notifications>
+              <p class="codebox">No notifications yet.</p>
+            </div>
+          </article>
         </div>
 
         <div class="portal-tab" id="profile">
@@ -243,11 +249,19 @@
         <div class="portal-tab" id="support">
           <article class="panel form-panel">
             <h3>Support Request</h3>
-            <div class="form-grid single">
-              <label>Subject<input type="text" placeholder="Subscription, payment, referral, or access issue" /></label>
-              <label>Message<textarea placeholder="Describe your concern"></textarea></label>
+            <form data-support-form>
+              <div class="form-grid single">
+                <label>Subject<input type="text" name="subject" placeholder="Subscription, payment, referral, or access issue" required /></label>
+                <label>Message<textarea name="message" placeholder="Describe your concern" required></textarea></label>
+              </div>
+              <button class="secondary-btn" type="submit">Send Request</button>
+            </form>
+          </article>
+          <article class="panel order-panel">
+            <h3>My Tickets</h3>
+            <div data-support-tickets-list>
+              <p class="codebox">No support tickets yet.</p>
             </div>
-            <button class="secondary-btn" type="button">Send Request</button>
           </article>
         </div>
       </section>

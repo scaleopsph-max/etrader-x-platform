@@ -23,12 +23,15 @@
   const adminPlanProductSelect = document.querySelector("[data-admin-plan-product]");
   const adminReferralList = document.querySelector("[data-admin-referral-list]");
   const adminCommissionQueue = document.querySelector("[data-admin-commission-queue]");
+  const adminSupportQueue = document.querySelector("[data-admin-support-queue]");
   const clientAuthGate = document.querySelector("[data-client-auth-gate]");
   const clientAppShell = document.querySelector("[data-client-app-shell]");
   const clientFlowAlert = document.querySelector("[data-client-flow-alert]");
   const paymentContext = document.querySelector("[data-payment-context]");
   const clientNextActions = document.querySelector("[data-client-next-actions]");
   const commissionForm = document.querySelector("[data-commission-form]");
+  const supportForm = document.querySelector("[data-support-form]");
+  const clientNotifications = document.querySelector("[data-client-notifications]");
 
   if (!sdk || !config.url || !config.publishableKey) {
     setStatus("Supabase config is missing. Add the project URL and publishable key first.", "warn");
@@ -61,6 +64,7 @@
     bindProfileForm();
     bindPaymentForm();
     bindCommissionForm();
+    bindSupportForm();
     bindAdminForms();
     bindSignOut();
     await refreshSession();
@@ -303,6 +307,37 @@
     });
   }
 
+  function bindSupportForm() {
+    if (!supportForm) return;
+
+    supportForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      if (!currentUser) {
+        setStatus("Please sign in before sending a support request.", "warn");
+        return;
+      }
+
+      const form = new FormData(supportForm);
+      const { error } = await client.from("support_tickets").insert({
+        client_id: currentUser.id,
+        subject: String(form.get("subject") || "").trim(),
+        message: String(form.get("message") || "").trim(),
+        status: "open",
+      });
+
+      if (error) {
+        setStatus(error.message, "warn");
+        return;
+      }
+
+      supportForm.reset();
+      setStatus("Support ticket submitted. ETX admin will review it.", "ok");
+      goToTab("support");
+      await hydrateClientData();
+    });
+  }
+
   function bindSignOut() {
     signOutButtons.forEach((button) => {
       button.addEventListener("click", async () => {
@@ -441,19 +476,21 @@
   async function hydrateClientData() {
     if (!currentUser) return;
 
-    const [orders, payments, subscriptions, referrals, commissionRequests] = await Promise.all([
+    const [orders, payments, subscriptions, referrals, commissionRequests, supportTickets] = await Promise.all([
       client.from("orders").select("id,status,total_amount,currency,created_at,plans(name,products(name))").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("payments").select("id,status,amount,currency,transaction_reference,created_at,orders(plans(name,products(name)))").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("subscriptions").select("status,expires_at,products(name),plans(name)").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("referrals").select("commission_amount,commission_status").eq("referrer_id", currentUser.id),
       client.from("commission_requests").select("amount,status,payout_method,created_at").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
+      client.from("support_tickets").select("id,subject,message,status,created_at,updated_at").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
     ]);
 
     renderList("[data-orders-list]", orders.data, renderOrderRow, "No orders yet.");
     renderList("[data-payments-list]", payments.data, renderPaymentRow, "No payment submitted yet.");
     renderList("[data-subscriptions-list]", subscriptions.data, renderSubscriptionRow, "No subscriptions yet.");
+    renderList("[data-support-tickets-list]", supportTickets.data, renderSupportTicketRow, "No support tickets yet.");
 
-    syncClientFlowState(orders.data || [], payments.data || [], subscriptions.data || []);
+    syncClientFlowState(orders.data || [], payments.data || [], subscriptions.data || [], supportTickets.data || []);
 
     const referralRows = referrals.data || [];
     availableCommission = referralRows
@@ -538,7 +575,7 @@
   async function loadAdminData() {
     if (!requireAdmin(false)) return;
 
-    const [products, plans, payments, referrals, commissionRequests] = await Promise.all([
+    const [products, plans, payments, referrals, commissionRequests, supportTickets] = await Promise.all([
       client.from("products").select("*").order("sort_order", { ascending: true }),
       client.from("plans").select("*,products(name,code)").order("created_at", { ascending: false }),
       client
@@ -556,10 +593,15 @@
         .select("id,client_id,amount,status,payout_method,payout_details,created_at,profiles!commission_requests_client_id_fkey(full_name,email,telegram_username)")
         .order("created_at", { ascending: false })
         .limit(30),
+      client
+        .from("support_tickets")
+        .select("id,client_id,subject,message,status,created_at,updated_at,profiles!support_tickets_client_id_fkey(full_name,email,telegram_username)")
+        .order("created_at", { ascending: false })
+        .limit(30),
     ]);
 
-    if (products.error || plans.error || payments.error || referrals.error || commissionRequests.error) {
-      setStatus(products.error?.message || plans.error?.message || payments.error?.message || referrals.error?.message || commissionRequests.error?.message, "warn");
+    if (products.error || plans.error || payments.error || referrals.error || commissionRequests.error || supportTickets.error) {
+      setStatus(products.error?.message || plans.error?.message || payments.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message, "warn");
       return;
     }
 
@@ -568,9 +610,11 @@
     renderListElement(adminPaymentQueue, payments.data, renderPaymentReviewCard, "No payments in queue.");
     renderListElement(adminReferralList, referrals.data, renderAdminReferralRow, "No referral records yet.");
     renderListElement(adminCommissionQueue, commissionRequests.data, renderCommissionReviewCard, "No withdrawal requests yet.");
+    renderListElement(adminSupportQueue, supportTickets.data, renderSupportReviewCard, "No support tickets yet.");
     hydrateAdminProductOptions(products.data || []);
     bindAdminPaymentActions();
     bindAdminCommissionActions();
+    bindAdminSupportActions();
   }
 
   function bindAdminPaymentActions() {
@@ -655,6 +699,34 @@
 
     await logAdminAction(`commission.${status}`, "commission_requests", requestId);
     setStatus(`Commission withdrawal ${status}.`, status === "approved" ? "ok" : "warn");
+    await loadAdminData();
+  }
+
+  function bindAdminSupportActions() {
+    document.querySelectorAll("[data-admin-ticket-status]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        if (!requireAdmin()) return;
+        await updateSupportTicket(button.dataset.ticketId, button.dataset.adminTicketStatus);
+      });
+    });
+  }
+
+  async function updateSupportTicket(ticketId, status) {
+    const { error } = await client
+      .from("support_tickets")
+      .update({
+        status,
+        assigned_to: currentUser.id,
+      })
+      .eq("id", ticketId);
+
+    if (error) {
+      setStatus(error.message, "warn");
+      return;
+    }
+
+    await logAdminAction(`support.${status}`, "support_tickets", ticketId);
+    setStatus(`Support ticket marked as ${formatStatus(status)}.`, status === "resolved" ? "ok" : "warn");
     await loadAdminData();
   }
 
@@ -838,7 +910,12 @@
     return `<div class="row"><span>${escapeHtml(payment.orders?.plans?.products?.name || "ETX Product")} / ${escapeHtml(payment.transaction_reference || "No reference")}</span><b class="${statusClass(payment.status)}">${escapeHtml(formatStatus(payment.status))}</b></div>`;
   }
 
-  function syncClientFlowState(orders, payments, subscriptions) {
+  function renderSupportTicketRow(ticket) {
+    const date = ticket.created_at ? new Date(ticket.created_at).toLocaleDateString() : "Today";
+    return `<div class="row"><span>${escapeHtml(ticket.subject)} <small>${escapeHtml(date)}</small></span><b class="${statusClass(ticket.status)}">${escapeHtml(formatStatus(ticket.status))}</b></div>`;
+  }
+
+  function syncClientFlowState(orders, payments, subscriptions, supportTickets = []) {
     const latestPayment = payments[0];
     const hasPendingPayment = payments.some((payment) => ["pending", "under_review"].includes(payment.status));
     const hasActiveSubscription = subscriptions.some((subscription) => ["active", "trial"].includes(subscription.status));
@@ -862,6 +939,36 @@
     }
 
     lastClientSnapshot = { hasPendingPayment, hasActiveSubscription };
+    renderClientNotifications(orders, payments, subscriptions, supportTickets);
+  }
+
+  function renderClientNotifications(orders, payments, subscriptions, supportTickets) {
+    if (!clientNotifications) return;
+
+    const latestPayment = payments[0];
+    const activeSubscription = subscriptions.find((subscription) => ["active", "trial"].includes(subscription.status));
+    const openTicket = supportTickets.find((ticket) => ["open", "pending_admin", "pending_client"].includes(ticket.status));
+    const notifications = [];
+
+    if (activeSubscription) {
+      notifications.push(["Subscription active", `${activeSubscription.products?.name || "ETX Product"} is active until ${formatDate(activeSubscription.expires_at)}.`, "ok"]);
+    } else if (latestPayment?.status === "under_review") {
+      notifications.push(["Payment under review", "Your proof was received. Please wait for admin verification.", "warn"]);
+    } else if (latestPayment?.status === "rejected") {
+      notifications.push(["Payment rejected", "Please submit corrected payment details or proof.", "rejected"]);
+    } else if (orders.length) {
+      notifications.push(["Order created", "Complete your payment proof upload to continue activation.", "warn"]);
+    } else {
+      notifications.push(["Start subscription", "Select a plan, submit proof, then wait for verification.", ""]);
+    }
+
+    if (openTicket) {
+      notifications.push(["Support ticket open", `${openTicket.subject} is ${formatStatus(openTicket.status)}.`, "warn"]);
+    }
+
+    clientNotifications.innerHTML = notifications
+      .map(([title, detail, tone]) => `<div class="notice-row ${tone}"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}</span></div>`)
+      .join("");
   }
 
   function renderSubscriptionSummary(subscriptions, payments) {
@@ -937,7 +1044,7 @@
   }
 
   function statusClass(status) {
-    if (["approved", "active", "trial", "available", "paid"].includes(status)) return "ok";
+    if (["approved", "active", "trial", "available", "paid", "resolved", "closed"].includes(status)) return "ok";
     if (["rejected", "cancelled", "expired"].includes(status)) return "rejected";
     return "warn";
   }
@@ -1034,6 +1141,22 @@
     `;
   }
 
+  function renderSupportReviewCard(ticket) {
+    const clientName = ticket.profiles?.full_name || ticket.profiles?.email || "Client";
+    const canWork = !["resolved", "closed"].includes(ticket.status);
+    return `
+      <div class="approval-card" data-ticket-card="${escapeHtml(ticket.id)}">
+        <div>
+          <strong>${escapeHtml(ticket.subject)}</strong>
+          <p>${escapeHtml(clientName)} / ${escapeHtml(ticket.message)}</p>
+        </div>
+        <span class="${statusClass(ticket.status)}">${escapeHtml(formatStatus(ticket.status))}</span>
+        <button class="secondary-btn" type="button" data-admin-ticket-status="pending_client" data-ticket-id="${escapeHtml(ticket.id)}"${canWork ? "" : " disabled"}>Need Client</button>
+        <button class="primary-btn" type="button" data-admin-ticket-status="resolved" data-ticket-id="${escapeHtml(ticket.id)}"${canWork ? "" : " disabled"}>Resolve</button>
+      </div>
+    `;
+  }
+
   function hydrateAdminProductOptions(products) {
     if (!adminPlanProductSelect) return;
     adminPlanProductSelect.innerHTML = products
@@ -1078,6 +1201,10 @@
   function formatMoney(amount, currency) {
     if (Number(amount) === 0) return "Free";
     return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
+  }
+
+  function formatDate(value) {
+    return value ? new Date(value).toLocaleDateString() : "No expiry";
   }
 
   function escapeHtml(value) {

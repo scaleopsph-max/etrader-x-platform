@@ -694,6 +694,37 @@ textarea {
   padding: 14px;
 }
 
+.notice-row {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 14px;
+}
+
+.notice-row:last-child {
+  margin-bottom: 0;
+}
+
+.notice-row span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.notice-row.ok {
+  border-color: rgba(52, 255, 141, 0.44);
+}
+
+.notice-row.warn {
+  border-color: rgba(255, 180, 56, 0.5);
+}
+
+.notice-row.rejected {
+  border-color: rgba(255, 121, 121, 0.48);
+}
+
 .flow-tracker {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
