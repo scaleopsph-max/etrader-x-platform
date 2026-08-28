@@ -126,6 +126,7 @@ a {
   min-height: 42px;
   border-radius: 8px;
   padding: 11px 15px;
+  color: var(--ink);
   font-weight: 800;
 }
 
@@ -454,7 +455,8 @@ h3 {
   cursor: pointer;
   font: inherit;
   font-weight: 800;
-  padding: 0;
+  min-height: 36px;
+  padding: 6px 0;
 }
 
 .portal-sidebar {
@@ -548,6 +550,7 @@ select,
 textarea {
   width: 100%;
   min-width: 0;
+  min-height: 46px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(2, 9, 14, 0.56);
@@ -828,17 +831,74 @@ textarea {
   }
 
   .portal-sidebar {
-    position: static;
+    position: sticky;
+    top: 78px;
+    z-index: 8;
+    display: flex;
+    gap: 8px;
     height: auto;
+    overflow-x: auto;
+    padding: 10px;
+    scrollbar-width: thin;
+  }
+
+  .portal-sidebar strong {
+    display: none;
+  }
+
+  .portal-sidebar button {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 44px;
+    margin-bottom: 0;
+    white-space: nowrap;
+  }
+
+  .portal-layout {
+    gap: 12px;
+    padding-top: 12px;
   }
 }
 
 @media (max-width: 640px) {
+  main,
+  .client-auth-gate,
+  .portal-layout {
+    width: min(100% - 20px, 1400px);
+  }
+
+  .site-header {
+    align-items: center;
+    flex-direction: row;
+    gap: 12px;
+    padding: 12px 10px;
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brand span:last-child {
+    min-width: 0;
+  }
+
+  .brand strong,
+  .brand small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .brand-mark {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+  }
+
   .nav-links {
     display: none;
   }
 
-  .header-actions,
   .hero-actions,
   .cta-stack,
   .login-strip,
@@ -851,7 +911,21 @@ textarea {
   .secondary-btn,
   .ghost-btn,
   .danger-btn {
+    min-height: 48px;
     width: 100%;
+  }
+
+  .header-actions {
+    flex: 0 0 auto;
+  }
+
+  .header-actions .primary-btn,
+  .header-actions .secondary-btn,
+  .header-actions .ghost-btn,
+  .header-actions .danger-btn {
+    width: auto;
+    min-height: 42px;
+    padding-inline: 12px;
   }
 
   .product-grid,
@@ -861,9 +935,22 @@ textarea {
   .content-grid,
   .buy-grid,
   .form-grid,
-  .flow-tracker,
   .approval-card {
     grid-template-columns: 1fr;
+  }
+
+  .flow-tracker {
+    display: flex;
+    gap: 8px;
+    margin-right: -10px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+  }
+
+  .flow-tracker span {
+    flex: 0 0 152px;
+    min-height: 54px;
   }
 
   .countdown-grid {
@@ -871,15 +958,54 @@ textarea {
   }
 
   .portal-layout {
-    width: min(100% - 20px, 1400px);
+    padding-bottom: 38px;
+  }
+
+  .portal-sidebar {
+    top: 67px;
+    width: calc(100% + 20px);
+    margin-inline: -10px;
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+  }
+
+  .client-auth-gate {
+    padding: 30px 0 44px;
+  }
+
+  .auth-landing {
+    gap: 20px;
+    min-height: auto;
+  }
+
+  .portal-hero {
+    gap: 12px;
+  }
+
+  .portal-hero .hero-lead {
+    display: none;
+  }
+
+  .panel,
+  .form-panel,
+  .login-card,
+  .stat-grid article {
+    padding: 16px;
   }
 
   .stat-grid strong {
-    font-size: 26px;
+    font-size: 24px;
   }
 
   .portal-hero h1,
   .auth-landing h1 {
-    font-size: 40px;
+    font-size: 34px;
+  }
+
+  .row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
   }
 }
