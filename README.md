@@ -8,7 +8,9 @@ Premium landing page and MVP framework for the ETrader-X trading products platfo
 - Conversion CTAs
 - Urgency promo section
 - Product catalog blocks
-- Client and admin route placeholders
+- Supabase-powered client auth
+- Client product selection, order creation, and payment-review submission
+- Hidden admin route with Supabase admin role guard
 
 ## Planned Stack
 
@@ -28,5 +30,6 @@ Premium landing page and MVP framework for the ETrader-X trading products platfo
 
 ## Database Framework
 
-The Supabase schema lives in `supabase/migrations/20260828033000_create_etx_core_schema.sql`.
+The Supabase schema starts in `supabase/migrations/20260828033000_create_etx_core_schema.sql`.
+Auth/profile policies and database hardening live in the follow-up migration files.
 See `docs/database-framework.md` for the table map and security model.

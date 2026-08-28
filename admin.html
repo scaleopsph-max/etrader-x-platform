@@ -50,20 +50,32 @@
               will protect this route before any data can be viewed or changed.
             </p>
           </div>
-          <form class="login-card admin-login-card" aria-label="Admin verification form">
-            <strong>Admin Access Preview</strong>
+          <form class="login-card admin-login-card" aria-label="Admin verification form" data-sign-in-form>
+            <strong>Admin Sign In</strong>
             <label>
               Admin Email
-              <input type="email" value="admin@etrader-x.com" />
+              <input type="email" name="email" autocomplete="email" required />
             </label>
             <label>
-              Security Code
-              <input type="password" value="previewonly" />
+              Password
+              <input type="password" name="password" autocomplete="current-password" required />
             </label>
-            <button class="danger-btn" type="button">Verify Admin</button>
+            <button class="danger-btn" type="submit">Verify Admin</button>
+            <button class="secondary-btn" type="button" data-sign-out>Sign Out</button>
           </form>
         </div>
 
+        <p class="codebox warn" data-auth-status>Checking admin session...</p>
+
+        <article class="panel" data-admin-gate>
+          <h3 data-admin-gate-title>Admin sign in required</h3>
+          <p>
+            The private admin workspace is hidden until the signed-in account has
+            `app_metadata.role = admin` in Supabase Auth.
+          </p>
+        </article>
+
+        <div data-admin-shell class="hidden">
         <div class="portal-tab active" id="admin-overview">
           <div class="stat-grid">
             <article><span>Pending Payments</span><strong>18</strong><small>Needs review today</small></article>
@@ -220,9 +232,13 @@
             <div class="row"><span>Commission ledger</span><button class="secondary-btn" type="button">Export CSV</button></div>
           </article>
         </div>
+        </div>
       </section>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/dist/umd/supabase.min.js"></script>
+    <script src="supabase-config.js"></script>
     <script src="portal.js"></script>
+    <script src="etx-auth.js"></script>
   </body>
 </html>

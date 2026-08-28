@@ -592,6 +592,10 @@ textarea {
   width: 100%;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .order-panel {
   margin-top: 14px;
 }
