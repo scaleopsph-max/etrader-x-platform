@@ -37,6 +37,8 @@ This module defines the database foundation for the ETrader-X MVP.
 - Do not authorize admin access from `user_metadata`; it is user-editable.
 - The frontend must never receive a Supabase `service_role` key.
 - Payment proof upload paths are stored in `payments.proof_path`; actual files should use Supabase Storage later.
+- Payment proof files now use the private `payment-proofs` Supabase Storage bucket.
+- Clients can upload/read their own proof files; admin users can review proof files through signed URLs.
 - This migration includes starter products and plans from the ETX Telegram flow.
 - Apply this only to the confirmed ETX Supabase project, not a shared production database.
 - For frontend integration, use `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.

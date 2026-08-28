@@ -13,6 +13,12 @@
   const paymentForm = document.querySelector("[data-payment-form]");
   const adminGate = document.querySelector("[data-admin-gate]");
   const adminShell = document.querySelector("[data-admin-shell]");
+  const adminProductForm = document.querySelector("[data-admin-product-form]");
+  const adminPlanForm = document.querySelector("[data-admin-plan-form]");
+  const adminProductsList = document.querySelector("[data-admin-products-list]");
+  const adminPlansList = document.querySelector("[data-admin-plans-list]");
+  const adminPaymentQueue = document.querySelector("[data-admin-payment-queue]");
+  const adminPlanProductSelect = document.querySelector("[data-admin-plan-product]");
 
   if (!sdk || !config.url || !config.publishableKey) {
     setStatus("Supabase config is missing. Add the project URL and publishable key first.", "warn");
@@ -37,6 +43,7 @@
     bindAuthForms();
     bindProfileForm();
     bindPaymentForm();
+    bindAdminForms();
     bindSignOut();
     await refreshSession();
     await loadPlans();
@@ -183,6 +190,13 @@
       }
 
       const file = paymentForm.querySelector('input[type="file"]')?.files?.[0];
+      let proofPath = null;
+      try {
+        proofPath = file ? await uploadPaymentProof(file) : null;
+      } catch (error) {
+        setStatus(error.message, "warn");
+        return;
+      }
       const { error: paymentError } = await client.from("payments").insert({
         order_id: order.id,
         client_id: currentUser.id,
@@ -191,7 +205,7 @@
         amount: Number(form.get("amount") || currentPlan.price_amount),
         currency: currentPlan.currency,
         transaction_reference: String(form.get("transaction_reference") || "").trim(),
-        proof_path: file ? `pending-upload/${currentUser.id}/${file.name}` : null,
+        proof_path: proofPath,
       });
 
       if (paymentError) {
@@ -212,6 +226,67 @@
         window.location.href = "index.html";
       });
     });
+  }
+
+  function bindAdminForms() {
+    if (adminProductForm) {
+      adminProductForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!requireAdmin()) return;
+
+        const form = new FormData(adminProductForm);
+        const payload = {
+          name: String(form.get("name") || "").trim(),
+          code: String(form.get("code") || "").trim().toUpperCase(),
+          category: String(form.get("category") || "expert_advisor"),
+          description: String(form.get("description") || "").trim(),
+          status: String(form.get("status") || "draft"),
+          sort_order: Number(form.get("sort_order") || 100),
+          created_by: currentUser.id,
+        };
+
+        const { error } = await client.from("products").upsert(payload, { onConflict: "code" });
+        if (error) {
+          setStatus(error.message, "warn");
+          return;
+        }
+
+        adminProductForm.reset();
+        setStatus("Product saved.", "ok");
+        await loadAdminData();
+        await loadPlans();
+      });
+    }
+
+    if (adminPlanForm) {
+      adminPlanForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!requireAdmin()) return;
+
+        const form = new FormData(adminPlanForm);
+        const payload = {
+          product_id: String(form.get("product_id") || ""),
+          name: String(form.get("name") || "").trim(),
+          price_amount: Number(form.get("price_amount") || 0),
+          currency: String(form.get("currency") || "USD"),
+          duration_days: Number(form.get("duration_days") || 30),
+          bonus_days: Number(form.get("bonus_days") || 0),
+          is_trial: form.get("is_trial") === "on",
+          status: String(form.get("status") || "active"),
+        };
+
+        const { error } = await client.from("plans").insert(payload);
+        if (error) {
+          setStatus(error.message, "warn");
+          return;
+        }
+
+        adminPlanForm.reset();
+        setStatus("Plan created.", "ok");
+        await loadAdminData();
+        await loadPlans();
+      });
+    }
   }
 
   async function ensureProfile(user) {
@@ -326,7 +401,204 @@
 
     if (!isAdmin) {
       setText("[data-admin-gate-title]", "Signed in, but admin role is required");
+      return;
     }
+
+    setStatus("Admin verified. Loading operations workspace...", "ok");
+    loadAdminData();
+  }
+
+  async function uploadPaymentProof(file) {
+    const safeName = file.name.replace(/[^a-z0-9._-]/gi, "-").toLowerCase();
+    const path = `${currentUser.id}/${Date.now()}-${safeName}`;
+    const { error } = await client.storage.from("payment-proofs").upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return path;
+  }
+
+  async function loadAdminData() {
+    if (!requireAdmin(false)) return;
+
+    const [products, plans, payments] = await Promise.all([
+      client.from("products").select("*").order("sort_order", { ascending: true }),
+      client.from("plans").select("*,products(name,code)").order("created_at", { ascending: false }),
+      client
+        .from("payments")
+        .select("*,orders(id,status,total_amount,currency,plan_id,plans(name,duration_days,bonus_days,product_id,products(name))),profiles!payments_client_id_fkey(full_name,email,telegram_username)")
+        .order("created_at", { ascending: false })
+        .limit(30),
+    ]);
+
+    if (products.error || plans.error || payments.error) {
+      setStatus(products.error?.message || plans.error?.message || payments.error?.message, "warn");
+      return;
+    }
+
+    renderListElement(adminProductsList, products.data, renderAdminProductRow, "No products yet.");
+    renderListElement(adminPlansList, plans.data, renderAdminPlanRow, "No plans yet.");
+    renderListElement(adminPaymentQueue, payments.data, renderPaymentReviewCard, "No payments in queue.");
+    hydrateAdminProductOptions(products.data || []);
+    bindAdminPaymentActions();
+  }
+
+  function bindAdminPaymentActions() {
+    document.querySelectorAll("[data-admin-approve], [data-admin-reject], [data-proof-path], [data-admin-product-status], [data-admin-plan-status]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        if (!requireAdmin()) return;
+
+        if (button.hasAttribute("data-admin-product-status")) {
+          await updateRecordStatus("products", button.dataset.productId, button.dataset.adminProductStatus);
+          return;
+        }
+
+        if (button.hasAttribute("data-admin-plan-status")) {
+          await updateRecordStatus("plans", button.dataset.planId, button.dataset.adminPlanStatus);
+          return;
+        }
+
+        const paymentId = button.dataset.paymentId;
+        if (button.hasAttribute("data-proof-path")) {
+          await openProof(button.dataset.proofPath);
+          return;
+        }
+
+        if (button.hasAttribute("data-admin-approve")) {
+          await approvePayment(paymentId);
+          return;
+        }
+
+        await rejectPayment(paymentId);
+      });
+    });
+  }
+
+  async function updateRecordStatus(table, id, status) {
+    const { error } = await client.from(table).update({ status }).eq("id", id);
+    if (error) {
+      setStatus(error.message, "warn");
+      return;
+    }
+
+    await logAdminAction(`${table}.${status}`, table, id);
+    setStatus(`${table.slice(0, -1)} marked as ${status}.`, "ok");
+    await loadAdminData();
+    await loadPlans();
+  }
+
+  async function approvePayment(paymentId) {
+    const { data: payment, error: readError } = await client
+      .from("payments")
+      .select("*,orders(id,plan_id,client_id,plans(duration_days,bonus_days,product_id))")
+      .eq("id", paymentId)
+      .single();
+
+    if (readError) {
+      setStatus(readError.message, "warn");
+      return;
+    }
+
+    const expiresAt = new Date();
+    const duration = Number(payment.orders?.plans?.duration_days || 30) + Number(payment.orders?.plans?.bonus_days || 0);
+    expiresAt.setDate(expiresAt.getDate() + duration);
+
+    const { error: paymentError } = await client
+      .from("payments")
+      .update({
+        status: "approved",
+        reviewed_by: currentUser.id,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq("id", payment.id);
+
+    const { error: orderError } = await client.from("orders").update({ status: "approved" }).eq("id", payment.order_id);
+
+    const { error: subscriptionError } = await client.from("subscriptions").insert({
+      client_id: payment.client_id,
+      product_id: payment.orders.plans.product_id,
+      plan_id: payment.orders.plan_id,
+      order_id: payment.order_id,
+      status: payment.amount === 0 ? "trial" : "active",
+      expires_at: expiresAt.toISOString(),
+      activated_by: currentUser.id,
+    });
+
+    const error = paymentError || orderError || subscriptionError;
+    if (error) {
+      setStatus(error.message, "warn");
+      return;
+    }
+
+    await logAdminAction("payment.approved", "payments", payment.id);
+    setStatus("Payment approved and subscription activated.", "ok");
+    await loadAdminData();
+  }
+
+  async function rejectPayment(paymentId) {
+    const { data: payment, error: readError } = await client.from("payments").select("order_id").eq("id", paymentId).single();
+    if (readError) {
+      setStatus(readError.message, "warn");
+      return;
+    }
+
+    const { error: paymentError } = await client
+      .from("payments")
+      .update({
+        status: "rejected",
+        reviewed_by: currentUser.id,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq("id", paymentId);
+
+    const { error: orderError } = await client.from("orders").update({ status: "rejected" }).eq("id", payment.order_id);
+    const error = paymentError || orderError;
+
+    if (error) {
+      setStatus(error.message, "warn");
+      return;
+    }
+
+    await logAdminAction("payment.rejected", "payments", paymentId);
+    setStatus("Payment rejected.", "ok");
+    await loadAdminData();
+  }
+
+  async function openProof(path) {
+    if (!path) {
+      setStatus("No proof file attached to this payment.", "warn");
+      return;
+    }
+
+    const { data, error } = await client.storage.from("payment-proofs").createSignedUrl(path, 300);
+    if (error) {
+      setStatus(error.message, "warn");
+      return;
+    }
+
+    window.open(data.signedUrl, "_blank", "noopener");
+  }
+
+  async function logAdminAction(action, entityTable, entityId) {
+    await client.from("audit_logs").insert({
+      actor_id: currentUser.id,
+      action,
+      entity_table: entityTable,
+      entity_id: entityId,
+    });
+  }
+
+  function requireAdmin(showMessage = true) {
+    const isAdmin = currentUser?.app_metadata?.role === "admin";
+    if (!isAdmin && showMessage) {
+      setStatus("Admin role required.", "warn");
+    }
+    return isAdmin;
   }
 
   function renderPlanCard(plan) {
@@ -354,8 +626,65 @@
     return `<div class="row"><span>${escapeHtml(subscription.products?.name || "ETX Product")}</span><b class="ok">${escapeHtml(subscription.status)} until ${escapeHtml(expiry)}</b></div>`;
   }
 
+  function renderAdminProductRow(product) {
+    const nextStatus = product.status === "active" ? "hidden" : "active";
+    return `
+      <div class="row">
+        <span>${escapeHtml(product.name)} <small>${escapeHtml(product.code)}</small></span>
+        <b class="${product.status === "active" ? "ok" : "warn"}">${escapeHtml(product.status)}</b>
+        <button class="secondary-btn" type="button" data-admin-product-status="${escapeHtml(nextStatus)}" data-product-id="${escapeHtml(product.id)}">${escapeHtml(nextStatus)}</button>
+      </div>
+    `;
+  }
+
+  function renderAdminPlanRow(plan) {
+    const nextStatus = plan.status === "active" ? "hidden" : "active";
+    return `
+      <div class="row">
+        <span>${escapeHtml(plan.products?.name || "ETX Product")} / ${escapeHtml(plan.name)}</span>
+        <b>${escapeHtml(formatMoney(Number(plan.price_amount), plan.currency))}</b>
+        <button class="secondary-btn" type="button" data-admin-plan-status="${escapeHtml(nextStatus)}" data-plan-id="${escapeHtml(plan.id)}">${escapeHtml(nextStatus)}</button>
+      </div>
+    `;
+  }
+
+  function renderPaymentReviewCard(payment) {
+    const clientName = payment.profiles?.full_name || payment.profiles?.email || "Client";
+    const plan = payment.orders?.plans;
+    const productName = plan?.products?.name || "ETX Product";
+    const proofButton = payment.proof_path
+      ? `<button class="secondary-btn" type="button" data-proof-path="${escapeHtml(payment.proof_path)}" data-payment-id="${escapeHtml(payment.id)}">View Proof</button>`
+      : `<span class="warn">No file</span>`;
+
+    return `
+      <div class="approval-card" data-payment-card="${escapeHtml(payment.id)}">
+        <div>
+          <strong>${escapeHtml(clientName)}</strong>
+          <p>${escapeHtml(productName)} / ${escapeHtml(plan?.name || "Plan")} / ${escapeHtml(formatMoney(Number(payment.amount), payment.currency))}</p>
+          <p>Ref: ${escapeHtml(payment.transaction_reference || "No reference")}</p>
+        </div>
+        <span class="${payment.status === "approved" ? "ok" : payment.status === "rejected" ? "rejected" : "warn"}">${escapeHtml(payment.status)}</span>
+        ${proofButton}
+        <button class="primary-btn" type="button" data-admin-approve data-payment-id="${escapeHtml(payment.id)}">Approve</button>
+        <button class="secondary-btn" type="button" data-admin-reject data-payment-id="${escapeHtml(payment.id)}">Reject</button>
+      </div>
+    `;
+  }
+
+  function hydrateAdminProductOptions(products) {
+    if (!adminPlanProductSelect) return;
+    adminPlanProductSelect.innerHTML = products
+      .map((product) => `<option value="${escapeHtml(product.id)}">${escapeHtml(product.name)}</option>`)
+      .join("");
+  }
+
   function renderList(selector, rows, renderer, emptyText) {
     const target = document.querySelector(selector);
+    if (!target) return;
+    target.innerHTML = rows?.length ? rows.map(renderer).join("") : `<p class="codebox">${escapeHtml(emptyText)}</p>`;
+  }
+
+  function renderListElement(target, rows, renderer, emptyText) {
     if (!target) return;
     target.innerHTML = rows?.length ? rows.map(renderer).join("") : `<p class="codebox">${escapeHtml(emptyText)}</p>`;
   }

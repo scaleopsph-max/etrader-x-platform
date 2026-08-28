@@ -102,21 +102,23 @@
           <div class="content-grid">
             <article class="panel form-panel">
               <h3>Create Product</h3>
-              <div class="form-grid">
-                <label>Product Name<input type="text" placeholder="ETX SAFY Expert Advisor" /></label>
-                <label>Product Code<input type="text" placeholder="SAFY-EA" /></label>
-                <label>Category<select><option>Expert Advisor</option><option>VIP Signal</option><option>Indicator</option><option>Academy Package</option></select></label>
-                <label>Status<select><option>Active</option><option>Draft</option><option>Hidden</option></select></label>
-              </div>
-              <label>Description<textarea placeholder="Describe access, benefits, rules, and support details."></textarea></label>
-              <button class="primary-btn" type="button">Save Product</button>
+              <form data-admin-product-form>
+                <div class="form-grid">
+                  <label>Product Name<input type="text" name="name" placeholder="ETX SAFY Expert Advisor" required /></label>
+                  <label>Product Code<input type="text" name="code" placeholder="SAFY-EA" required /></label>
+                  <label>Category<select name="category"><option value="expert_advisor">Expert Advisor</option><option value="signal">VIP Signal</option><option value="indicator">Indicator</option><option value="academy_package">Academy Package</option></select></label>
+                  <label>Status<select name="status"><option value="active">Active</option><option value="draft">Draft</option><option value="hidden">Hidden</option></select></label>
+                  <label>Sort Order<input type="number" name="sort_order" value="100" min="0" /></label>
+                </div>
+                <label>Description<textarea name="description" placeholder="Describe access, benefits, rules, and support details."></textarea></label>
+                <button class="primary-btn" type="submit">Save Product</button>
+              </form>
             </article>
             <article class="panel">
               <h3>Current Products</h3>
-              <div class="row"><span>ETX SAFY EA</span><b class="ok">Active</b></div>
-              <div class="row"><span>ETX VIP Signal</span><b class="ok">Active</b></div>
-              <div class="row"><span>Yugo Ashi Indicator</span><b class="ok">Active</b></div>
-              <div class="row"><span>Elite X Package</span><b class="warn">Promo</b></div>
+              <div data-admin-products-list>
+                <p class="codebox">Sign in as admin to load products.</p>
+              </div>
             </article>
           </div>
         </div>
@@ -124,43 +126,33 @@
         <div class="portal-tab" id="admin-plans">
           <article class="panel form-panel">
             <h3>Plans & Pricing</h3>
-            <div class="form-grid">
-              <label>Product<select><option>ETX SAFY EA</option><option>ETX VIP Signal</option><option>Yugo Ashi Indicator</option><option>Elite X Package</option></select></label>
-              <label>Plan Name<input type="text" placeholder="Premium Plan" /></label>
-              <label>Price<input type="text" placeholder="$300" /></label>
-              <label>Duration<select><option>1 month</option><option>3 months</option><option>6 months</option><option>12 months + 2 free</option></select></label>
-            </div>
-            <button class="primary-btn" type="button">Create Plan</button>
+            <form data-admin-plan-form>
+              <div class="form-grid">
+                <label>Product<select name="product_id" data-admin-plan-product required></select></label>
+                <label>Plan Name<input type="text" name="name" placeholder="Premium Plan" required /></label>
+                <label>Price<input type="number" name="price_amount" placeholder="300" min="0" step="0.01" required /></label>
+                <label>Currency<input type="text" name="currency" value="USD" required /></label>
+                <label>Duration Days<input type="number" name="duration_days" value="30" min="1" required /></label>
+                <label>Bonus Days<input type="number" name="bonus_days" value="0" min="0" /></label>
+                <label>Status<select name="status"><option value="active">Active</option><option value="draft">Draft</option><option value="hidden">Hidden</option></select></label>
+                <label class="checkbox-line"><input type="checkbox" name="is_trial" /> Free trial</label>
+              </div>
+              <button class="primary-btn" type="submit">Create Plan</button>
+            </form>
           </article>
           <article class="panel order-panel">
             <h3>Published Plans</h3>
-            <div class="row"><span>Basic Plan</span><b>$100</b></div>
-            <div class="row"><span>Advance Plan</span><b>$200</b></div>
-            <div class="row"><span>Premium Plan</span><b>$300</b></div>
-            <div class="row"><span>Promo Plan</span><b>$400</b></div>
+            <div data-admin-plans-list>
+              <p class="codebox">Sign in as admin to load plans.</p>
+            </div>
           </article>
         </div>
 
         <div class="portal-tab" id="admin-payments">
           <article class="panel">
             <h3>Payment Approval Queue</h3>
-            <div class="approval-card" data-payment="GCash - Premium Plan - Maria L.">
-              <div>
-                <strong>Maria L.</strong>
-                <p>GCash proof submitted for ETX SAFY EA Premium Plan.</p>
-              </div>
-              <span class="warn">Pending</span>
-              <button class="primary-btn" type="button" data-approve>Approve</button>
-              <button class="secondary-btn" type="button" data-reject>Reject</button>
-            </div>
-            <div class="approval-card" data-payment="USDT TRC20 - VIP Signal - John P.">
-              <div>
-                <strong>John P.</strong>
-                <p>USDT TRC20 transaction hash submitted for VIP Signal promo.</p>
-              </div>
-              <span class="warn">Pending</span>
-              <button class="primary-btn" type="button" data-approve>Approve</button>
-              <button class="secondary-btn" type="button" data-reject>Reject</button>
+            <div data-admin-payment-queue>
+              <p class="codebox">Sign in as admin to load payment queue.</p>
             </div>
             <p class="codebox" id="admin-action-log">No payment action selected yet.</p>
           </article>

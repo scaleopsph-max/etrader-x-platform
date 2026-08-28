@@ -11,6 +11,9 @@ Premium landing page and MVP framework for the ETrader-X trading products platfo
 - Supabase-powered client auth
 - Client product selection, order creation, and payment-review submission
 - Hidden admin route with Supabase admin role guard
+- Admin product and plan management
+- Admin payment review with subscription activation
+- Private Supabase Storage bucket for payment proofs
 
 ## Planned Stack
 
@@ -32,4 +35,5 @@ Premium landing page and MVP framework for the ETrader-X trading products platfo
 
 The Supabase schema starts in `supabase/migrations/20260828033000_create_etx_core_schema.sql`.
 Auth/profile policies and database hardening live in the follow-up migration files.
+Payment proof storage and admin CRUD permissions are added in the Module 7/8 migrations.
 See `docs/database-framework.md` for the table map and security model.
