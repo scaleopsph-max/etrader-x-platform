@@ -401,20 +401,40 @@ h3 {
 
 .auth-landing {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+  grid-template-columns: minmax(0, 0.92fr) minmax(360px, 0.72fr);
   gap: clamp(22px, 5vw, 56px);
-  align-items: start;
+  align-items: center;
   min-height: calc(100vh - 180px);
 }
 
 .auth-landing h1 {
-  font-size: clamp(42px, 6vw, 78px);
+  max-width: 680px;
+  font-size: clamp(46px, 7vw, 82px);
 }
 
-.auth-card-grid {
+.auth-panel-stack {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
+}
+
+.auth-panel-stack .login-card {
+  min-height: auto;
+}
+
+.auth-switch {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.auth-switch button {
+  border: 0;
+  background: transparent;
+  color: var(--cyan);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  padding: 0;
 }
 
 .portal-sidebar {
@@ -670,8 +690,7 @@ textarea {
   .split,
   .portal-layout,
   .portal-hero,
-  .auth-landing,
-  .auth-card-grid {
+  .auth-landing {
     grid-template-columns: 1fr;
   }
 

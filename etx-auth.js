@@ -7,6 +7,8 @@
   const profileForm = document.querySelector("[data-profile-form]");
   const signInForm = document.querySelector("[data-sign-in-form]");
   const signUpForm = document.querySelector("[data-sign-up-form]");
+  const showSignupButton = document.querySelector("[data-show-signup]");
+  const showLoginButton = document.querySelector("[data-show-login]");
   const signOutButtons = document.querySelectorAll("[data-sign-out]");
   const dynamicPlanGrid = document.querySelector("[data-dynamic-plans]");
   const selectedPlan = document.getElementById("selected-plan");
@@ -43,6 +45,7 @@
 
   async function init() {
     bindAuthForms();
+    bindAuthModeToggle();
     bindProfileForm();
     bindPaymentForm();
     bindAdminForms();
@@ -116,6 +119,24 @@
         }
 
         setStatus("Account created and signed in.", "ok");
+      });
+    }
+  }
+
+  function bindAuthModeToggle() {
+    if (showSignupButton && signInForm && signUpForm) {
+      showSignupButton.addEventListener("click", () => {
+        signInForm.classList.add("hidden");
+        signUpForm.classList.remove("hidden");
+        setStatus("Create your client account to continue.", "ok");
+      });
+    }
+
+    if (showLoginButton && signInForm && signUpForm) {
+      showLoginButton.addEventListener("click", () => {
+        signUpForm.classList.add("hidden");
+        signInForm.classList.remove("hidden");
+        setStatus("Sign in or create a client account to continue.", "warn");
       });
     }
   }

@@ -30,15 +30,15 @@
       <section class="auth-landing">
         <div>
           <p class="eyebrow">Client access</p>
-          <h1>Login or create your ETrader-X client account.</h1>
+          <h1>ETrader-X client access.</h1>
           <p class="hero-lead">
-            After sign in, your dashboard, subscriptions, payment upload, referral code,
-            and support tools will appear.
+            Sign in to manage your subscriptions, payment verification, referrals,
+            and support requests in one secure portal.
           </p>
           <p class="codebox warn" data-auth-status>Checking session...</p>
         </div>
 
-        <div class="auth-card-grid">
+        <div class="auth-panel-stack">
           <form class="login-card" aria-label="Client login form" data-sign-in-form>
             <strong>Client Login</strong>
             <label>
@@ -50,15 +50,17 @@
               <input type="password" name="password" autocomplete="current-password" required />
             </label>
             <button class="primary-btn" type="submit">Enter Client Portal</button>
+            <p class="auth-switch">New client? <button type="button" data-show-signup>Create account now</button></p>
           </form>
 
-          <form class="login-card" aria-label="Client signup form" data-sign-up-form>
+          <form class="login-card hidden" aria-label="Client signup form" data-sign-up-form>
             <strong>Create Client Account</strong>
             <label>Full Name<input type="text" name="full_name" autocomplete="name" required /></label>
             <label>Email<input type="email" name="email" autocomplete="email" required /></label>
             <label>Telegram Username<input type="text" name="telegram_username" placeholder="@username" /></label>
             <label>Password<input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
             <button class="danger-btn" type="submit">Create Account</button>
+            <p class="auth-switch">Already registered? <button type="button" data-show-login>Back to login</button></p>
           </form>
         </div>
       </section>
