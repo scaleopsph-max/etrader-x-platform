@@ -25,3 +25,8 @@ Premium landing page and MVP framework for the ETrader-X trading products platfo
 - Admin payment approval
 - Subscription activation
 - Referral and commission tracking
+
+## Database Framework
+
+The Supabase schema lives in `supabase/migrations/20260828033000_create_etx_core_schema.sql`.
+See `docs/database-framework.md` for the table map and security model.
