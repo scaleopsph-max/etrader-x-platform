@@ -18,7 +18,7 @@
   </head>
   <body>
     <header class="site-header">
-      <a class="brand" href="#top" aria-label="ETrader-X home">
+      <a class="brand" href="#top" aria-label="ETrader-X home" data-admin-trigger>
         <span class="brand-mark">ETX</span>
         <span>
           <strong>ETrader-X</strong>
@@ -57,7 +57,7 @@
           <div class="trust-row" aria-label="Platform highlights">
             <span>Manual payment verification</span>
             <span>Client subscription tracking</span>
-            <span>Admin-controlled access</span>
+            <span>Protected account access</span>
           </div>
         </div>
 
@@ -82,7 +82,7 @@
           <p class="eyebrow">Product ecosystem</p>
           <h2>From Telegram product menu to structured web catalog.</h2>
           <p>
-            Products are grouped so clients can understand what they are buying and admins can manage
+            Products are grouped so clients can understand what they are buying while the team can manage
             prices, plans, and access rules cleanly.
           </p>
         </div>
@@ -109,7 +109,7 @@
           <article class="product-card">
             <span class="product-code">PRO-X</span>
             <h3>Elite X and Pro-X Packages</h3>
-            <p>Academy package offers with admin-managed enrollment and payment approval.</p>
+            <p>Academy package offers with managed enrollment and payment approval.</p>
             <strong>$130 / $300</strong>
           </article>
         </div>
@@ -121,11 +121,10 @@
           <h2>Clear CTA path from visitor to paid subscriber.</h2>
           <p>
             The landing page pushes clients toward a single action: choose a product, submit payment
-            proof, then wait for admin approval.
+            proof, then wait for account approval.
           </p>
           <div class="cta-stack">
             <a class="primary-btn large" href="#client-login">Start Client Application</a>
-            <a class="ghost-btn large" href="#admin-login">Admin Login</a>
           </div>
         </div>
 
@@ -165,7 +164,7 @@
           </article>
           <article>
             <strong>Upload payment proof</strong>
-            <p>GCash, BPI, and USDT proof can be reviewed by admins.</p>
+            <p>GCash, BPI, and USDT proof can be reviewed before account activation.</p>
           </article>
           <article>
             <strong>Referral tracking</strong>
@@ -182,20 +181,12 @@
         </div>
         <a class="primary-btn large" href="client.html">Enter Client Portal</a>
       </section>
-
-      <section class="login-strip admin" id="admin-login">
-        <div>
-          <p class="eyebrow">Admin side</p>
-          <h2>Private admin operations</h2>
-          <p>Create products, approve payments, activate subscriptions, and track reports.</p>
-        </div>
-        <a class="danger-btn large" href="admin.html">Enter Admin Portal</a>
-      </section>
     </main>
 
     <footer class="site-footer" id="support">
       <strong>ETrader-X Official</strong>
       <span>Trading products portal MVP framework.</span>
     </footer>
+    <script src="admin-entry.js"></script>
   </body>
 </html>
