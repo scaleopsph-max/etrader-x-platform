@@ -21,11 +21,14 @@
   const adminPlansList = document.querySelector("[data-admin-plans-list]");
   const adminPaymentQueue = document.querySelector("[data-admin-payment-queue]");
   const adminPlanProductSelect = document.querySelector("[data-admin-plan-product]");
+  const adminReferralList = document.querySelector("[data-admin-referral-list]");
+  const adminCommissionQueue = document.querySelector("[data-admin-commission-queue]");
   const clientAuthGate = document.querySelector("[data-client-auth-gate]");
   const clientAppShell = document.querySelector("[data-client-app-shell]");
   const clientFlowAlert = document.querySelector("[data-client-flow-alert]");
   const paymentContext = document.querySelector("[data-payment-context]");
   const clientNextActions = document.querySelector("[data-client-next-actions]");
+  const commissionForm = document.querySelector("[data-commission-form]");
 
   if (!sdk || !config.url || !config.publishableKey) {
     setStatus("Supabase config is missing. Add the project URL and publishable key first.", "warn");
@@ -43,6 +46,8 @@
   let currentUser = null;
   let currentProfile = null;
   let currentPlan = null;
+  let availableCommission = 0;
+  const referredByCode = getReferralCode();
   let lastClientSnapshot = {
     hasPendingPayment: false,
     hasActiveSubscription: false,
@@ -55,6 +60,7 @@
     bindAuthModeToggle();
     bindProfileForm();
     bindPaymentForm();
+    bindCommissionForm();
     bindAdminForms();
     bindSignOut();
     await refreshSession();
@@ -208,7 +214,7 @@
           plan_id: currentPlan.id,
           total_amount: currentPlan.price_amount,
           currency: currentPlan.currency,
-          referral_code_used: String(form.get("referral_code") || "").trim() || null,
+          referral_code_used: String(form.get("referral_code") || referredByCode || "").trim().toUpperCase() || null,
           notes: `Client selected ${currentPlan.product_name} / ${currentPlan.name}`,
         })
         .select()
@@ -247,6 +253,52 @@
       setStatus("Payment submitted for admin review.", "ok");
       setClientFlow("verification", "Payment received. Please wait while admin verifies your payment proof.");
       goToTab("subscriptions");
+      await hydrateClientData();
+    });
+  }
+
+  function bindCommissionForm() {
+    if (!commissionForm) return;
+
+    commissionForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      if (!currentUser) {
+        setStatus("Please sign in before requesting commission withdrawal.", "warn");
+        return;
+      }
+
+      if (availableCommission <= 0) {
+        setStatus("No available commission to withdraw yet.", "warn");
+        return;
+      }
+
+      const form = new FormData(commissionForm);
+      const { error } = await client.from("commission_requests").insert({
+        client_id: currentUser.id,
+        amount: availableCommission,
+        payout_method: String(form.get("payout_method") || "").trim(),
+        payout_details: String(form.get("payout_details") || "").trim(),
+      });
+
+      if (error) {
+        setStatus(error.message, "warn");
+        return;
+      }
+
+      const { error: referralError } = await client
+        .from("referrals")
+        .update({ commission_status: "requested" })
+        .eq("referrer_id", currentUser.id)
+        .eq("commission_status", "available");
+
+      if (referralError) {
+        setStatus(referralError.message, "warn");
+        return;
+      }
+
+      commissionForm.reset();
+      setStatus("Commission withdrawal request submitted for admin review.", "ok");
       await hydrateClientData();
     });
   }
@@ -389,11 +441,12 @@
   async function hydrateClientData() {
     if (!currentUser) return;
 
-    const [orders, payments, subscriptions, referrals] = await Promise.all([
+    const [orders, payments, subscriptions, referrals, commissionRequests] = await Promise.all([
       client.from("orders").select("id,status,total_amount,currency,created_at,plans(name,products(name))").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("payments").select("id,status,amount,currency,transaction_reference,created_at,orders(plans(name,products(name)))").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("subscriptions").select("status,expires_at,products(name),plans(name)").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("referrals").select("commission_amount,commission_status").eq("referrer_id", currentUser.id),
+      client.from("commission_requests").select("amount,status,payout_method,created_at").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
     ]);
 
     renderList("[data-orders-list]", orders.data, renderOrderRow, "No orders yet.");
@@ -402,10 +455,17 @@
 
     syncClientFlowState(orders.data || [], payments.data || [], subscriptions.data || []);
 
-    const totalCommission = (referrals.data || []).reduce((sum, item) => sum + Number(item.commission_amount || 0), 0);
+    const referralRows = referrals.data || [];
+    availableCommission = referralRows
+      .filter((item) => item.commission_status === "available")
+      .reduce((sum, item) => sum + Number(item.commission_amount || 0), 0);
+
+    renderList("[data-commission-requests-list]", commissionRequests.data, renderCommissionRequestRow, "No withdrawal request yet.");
+    setText("[data-referral-invites]", String(referralRows.length));
+    setText("[data-referral-conversions]", String(referralRows.filter((item) => ["available", "requested", "approved", "paid"].includes(item.commission_status)).length));
     setText("[data-referral-code]", currentProfile?.referral_code || "Pending");
     setText("[data-referral-link]", `${window.location.origin}/?ref=${currentProfile?.referral_code || ""}`);
-    setText("[data-commission-total]", formatMoney(totalCommission, "USD"));
+    setText("[data-commission-total]", formatMoney(availableCommission, "USD"));
   }
 
   function renderSignedOut() {
@@ -478,7 +538,7 @@
   async function loadAdminData() {
     if (!requireAdmin(false)) return;
 
-    const [products, plans, payments] = await Promise.all([
+    const [products, plans, payments, referrals, commissionRequests] = await Promise.all([
       client.from("products").select("*").order("sort_order", { ascending: true }),
       client.from("plans").select("*,products(name,code)").order("created_at", { ascending: false }),
       client
@@ -486,18 +546,31 @@
         .select("*,orders(id,status,total_amount,currency,plan_id,plans(name,duration_days,bonus_days,product_id,products(name))),profiles!payments_client_id_fkey(full_name,email,telegram_username)")
         .order("created_at", { ascending: false })
         .limit(30),
+      client
+        .from("referrals")
+        .select("id,commission_amount,commission_status,created_at,referrer:profiles!referrals_referrer_id_fkey(full_name,email,referral_code),referred:profiles!referrals_referred_client_id_fkey(full_name,email),orders(total_amount,currency)")
+        .order("created_at", { ascending: false })
+        .limit(30),
+      client
+        .from("commission_requests")
+        .select("id,client_id,amount,status,payout_method,payout_details,created_at,profiles!commission_requests_client_id_fkey(full_name,email,telegram_username)")
+        .order("created_at", { ascending: false })
+        .limit(30),
     ]);
 
-    if (products.error || plans.error || payments.error) {
-      setStatus(products.error?.message || plans.error?.message || payments.error?.message, "warn");
+    if (products.error || plans.error || payments.error || referrals.error || commissionRequests.error) {
+      setStatus(products.error?.message || plans.error?.message || payments.error?.message || referrals.error?.message || commissionRequests.error?.message, "warn");
       return;
     }
 
     renderListElement(adminProductsList, products.data, renderAdminProductRow, "No products yet.");
     renderListElement(adminPlansList, plans.data, renderAdminPlanRow, "No plans yet.");
     renderListElement(adminPaymentQueue, payments.data, renderPaymentReviewCard, "No payments in queue.");
+    renderListElement(adminReferralList, referrals.data, renderAdminReferralRow, "No referral records yet.");
+    renderListElement(adminCommissionQueue, commissionRequests.data, renderCommissionReviewCard, "No withdrawal requests yet.");
     hydrateAdminProductOptions(products.data || []);
     bindAdminPaymentActions();
+    bindAdminCommissionActions();
   }
 
   function bindAdminPaymentActions() {
@@ -531,6 +604,60 @@
     });
   }
 
+  function bindAdminCommissionActions() {
+    document.querySelectorAll("[data-admin-commission-approve], [data-admin-commission-reject]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        if (!requireAdmin()) return;
+
+        if (button.hasAttribute("data-admin-commission-approve")) {
+          await updateCommissionRequest(button.dataset.requestId, "approved");
+          return;
+        }
+
+        await updateCommissionRequest(button.dataset.requestId, "rejected");
+      });
+    });
+  }
+
+  async function updateCommissionRequest(requestId, status) {
+    const { data: request, error: readError } = await client
+      .from("commission_requests")
+      .select("id,client_id")
+      .eq("id", requestId)
+      .single();
+
+    if (readError) {
+      setStatus(readError.message, "warn");
+      return;
+    }
+
+    const { error: requestError } = await client
+      .from("commission_requests")
+      .update({
+        status,
+        reviewed_by: currentUser.id,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq("id", requestId);
+
+    const nextReferralStatus = status === "approved" ? "paid" : "available";
+    const { error: referralError } = await client
+      .from("referrals")
+      .update({ commission_status: nextReferralStatus })
+      .eq("referrer_id", request.client_id)
+      .eq("commission_status", "requested");
+
+    const error = requestError || referralError;
+    if (error) {
+      setStatus(error.message, "warn");
+      return;
+    }
+
+    await logAdminAction(`commission.${status}`, "commission_requests", requestId);
+    setStatus(`Commission withdrawal ${status}.`, status === "approved" ? "ok" : "warn");
+    await loadAdminData();
+  }
+
   async function updateRecordStatus(table, id, status) {
     const { error } = await client.from(table).update({ status }).eq("id", id);
     if (error) {
@@ -547,7 +674,7 @@
   async function approvePayment(paymentId) {
     const { data: payment, error: readError } = await client
       .from("payments")
-      .select("*,orders(id,plan_id,client_id,plans(duration_days,bonus_days,product_id))")
+      .select("*,orders(id,plan_id,client_id,referral_code_used,plans(duration_days,bonus_days,product_id))")
       .eq("id", paymentId)
       .single();
 
@@ -581,7 +708,8 @@
       activated_by: currentUser.id,
     });
 
-    const error = paymentError || orderError || subscriptionError;
+    const referralError = await createReferralCommission(payment);
+    const error = paymentError || orderError || subscriptionError || referralError;
     if (error) {
       setStatus(error.message, "warn");
       return;
@@ -590,6 +718,34 @@
     await logAdminAction("payment.approved", "payments", payment.id);
     setStatus("Payment approved and subscription activated.", "ok");
     await loadAdminData();
+  }
+
+  async function createReferralCommission(payment) {
+    const referralCode = payment.orders?.referral_code_used;
+    if (!referralCode) return null;
+
+    const { data: referrer, error: referrerError } = await client
+      .from("profiles")
+      .select("id")
+      .eq("referral_code", referralCode)
+      .neq("id", payment.client_id)
+      .maybeSingle();
+
+    if (referrerError || !referrer) return referrerError || null;
+
+    const commissionAmount = Number((Number(payment.amount || 0) * 0.1).toFixed(2));
+    const { error } = await client.from("referrals").upsert(
+      {
+        referrer_id: referrer.id,
+        referred_client_id: payment.client_id,
+        order_id: payment.order_id,
+        commission_amount: commissionAmount,
+        commission_status: "available",
+      },
+      { onConflict: "referrer_id,referred_client_id" }
+    );
+
+    return error || null;
   }
 
   async function rejectPayment(paymentId) {
@@ -675,7 +831,7 @@
 
   function renderSubscriptionRow(subscription) {
     const expiry = subscription.expires_at ? new Date(subscription.expires_at).toLocaleDateString() : "No expiry";
-    return `<div class="row"><span>${escapeHtml(subscription.products?.name || "ETX Product")}</span><b class="ok">${escapeHtml(subscription.status)} until ${escapeHtml(expiry)}</b></div>`;
+    return `<div class="row"><span>${escapeHtml(subscription.products?.name || "ETX Product")}</span><b class="ok">${escapeHtml(formatStatus(subscription.status))} until ${escapeHtml(expiry)}</b></div>`;
   }
 
   function renderPaymentRow(payment) {
@@ -689,12 +845,16 @@
 
     if (hasActiveSubscription) {
       setClientFlow("subscription", "Congratulations. Your subscription is now active and reflected in your account.");
+      renderSubscriptionSummary(subscriptions, payments);
     } else if (latestPayment?.status === "rejected") {
       setClientFlow("payment", "Payment was rejected. Please submit corrected payment details or proof.");
+      renderSubscriptionSummary(subscriptions, payments);
     } else if (hasPendingPayment || orders.some((order) => ["pending_payment", "under_review"].includes(order.status))) {
       setClientFlow("verification", "Payment submitted. Please wait for admin verification.");
+      renderSubscriptionSummary(subscriptions, payments);
     } else if (!currentPlan) {
       setClientFlow("select", "Select a plan to start your subscription request.");
+      renderSubscriptionSummary(subscriptions, payments);
     }
 
     if (!lastClientSnapshot.hasActiveSubscription && hasActiveSubscription) {
@@ -702,6 +862,25 @@
     }
 
     lastClientSnapshot = { hasPendingPayment, hasActiveSubscription };
+  }
+
+  function renderSubscriptionSummary(subscriptions, payments) {
+    const activeSubscription = subscriptions.find((subscription) => ["active", "trial"].includes(subscription.status));
+    const latestPayment = payments[0];
+
+    if (activeSubscription) {
+      const expiry = activeSubscription.expires_at ? new Date(activeSubscription.expires_at) : null;
+      const daysLeft = expiry ? Math.max(0, Math.ceil((expiry - new Date()) / 86400000)) : "--";
+      setText("[data-subscription-state]", formatStatus(activeSubscription.status));
+      setText("[data-subscription-detail]", `${activeSubscription.products?.name || "ETX Product"} / ${activeSubscription.plans?.name || "Plan"}`);
+      setText("[data-renewal-days]", String(daysLeft));
+    } else {
+      setText("[data-subscription-state]", latestPayment ? "Pending" : "None");
+      setText("[data-subscription-detail]", latestPayment ? "Waiting for admin verification" : "No active subscription yet");
+      setText("[data-renewal-days]", "--");
+    }
+
+    setText("[data-latest-payment-state]", latestPayment ? formatStatus(latestPayment.status) : "None");
   }
 
   function setClientFlow(step, message) {
@@ -758,13 +937,27 @@
   }
 
   function statusClass(status) {
-    if (["approved", "active", "trial"].includes(status)) return "ok";
+    if (["approved", "active", "trial", "available", "paid"].includes(status)) return "ok";
     if (["rejected", "cancelled", "expired"].includes(status)) return "rejected";
     return "warn";
   }
 
   function formatStatus(status) {
     return String(status || "").replace(/_/g, " ");
+  }
+
+  function renderCommissionRequestRow(request) {
+    return `<div class="row"><span>${escapeHtml(request.payout_method)} / ${escapeHtml(formatMoney(Number(request.amount), "USD"))}</span><b class="${statusClass(request.status)}">${escapeHtml(formatStatus(request.status))}</b></div>`;
+  }
+
+  function getReferralCode() {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("ref");
+    if (fromUrl) {
+      window.localStorage.setItem("etx_referral_code", fromUrl.trim().toUpperCase());
+      return fromUrl.trim().toUpperCase();
+    }
+    return window.localStorage.getItem("etx_referral_code") || "";
   }
 
   function renderAdminProductRow(product) {
@@ -808,6 +1001,35 @@
         ${proofButton}
         <button class="primary-btn" type="button" data-admin-approve data-payment-id="${escapeHtml(payment.id)}">Approve</button>
         <button class="secondary-btn" type="button" data-admin-reject data-payment-id="${escapeHtml(payment.id)}">Reject</button>
+      </div>
+    `;
+  }
+
+  function renderAdminReferralRow(referral) {
+    const referrer = referral.referrer?.full_name || referral.referrer?.email || "Referrer";
+    const referred = referral.referred?.full_name || referral.referred?.email || "Client";
+    const code = referral.referrer?.referral_code || "ETX";
+    return `
+      <div class="row">
+        <span>${escapeHtml(referrer)} <small>${escapeHtml(code)} -> ${escapeHtml(referred)}</small></span>
+        <b class="${statusClass(referral.commission_status)}">${escapeHtml(formatMoney(Number(referral.commission_amount), referral.orders?.currency || "USD"))} / ${escapeHtml(formatStatus(referral.commission_status))}</b>
+      </div>
+    `;
+  }
+
+  function renderCommissionReviewCard(request) {
+    const clientName = request.profiles?.full_name || request.profiles?.email || "Client";
+    const canReview = request.status === "requested";
+    return `
+      <div class="approval-card" data-commission-card="${escapeHtml(request.id)}">
+        <div>
+          <strong>${escapeHtml(clientName)}</strong>
+          <p>${escapeHtml(request.payout_method)} / ${escapeHtml(request.payout_details || "No payout notes")}</p>
+        </div>
+        <span class="${statusClass(request.status)}">${escapeHtml(formatStatus(request.status))}</span>
+        <strong>${escapeHtml(formatMoney(Number(request.amount), "USD"))}</strong>
+        <button class="primary-btn" type="button" data-admin-commission-approve data-request-id="${escapeHtml(request.id)}"${canReview ? "" : " disabled"}>Approve</button>
+        <button class="secondary-btn" type="button" data-admin-commission-reject data-request-id="${escapeHtml(request.id)}"${canReview ? "" : " disabled"}>Reject</button>
       </div>
     `;
   }

@@ -191,6 +191,11 @@
         </div>
 
         <div class="portal-tab" id="subscriptions">
+          <div class="stat-grid">
+            <article><span>Subscription Status</span><strong data-subscription-state>Pending</strong><small data-subscription-detail>No active subscription yet</small></article>
+            <article><span>Renewal Window</span><strong data-renewal-days>--</strong><small>Days remaining</small></article>
+            <article><span>Latest Payment</span><strong data-latest-payment-state>None</strong><small>Admin verification status</small></article>
+          </div>
           <article class="panel">
             <h3>My Subscriptions</h3>
             <div data-subscriptions-list>
@@ -220,10 +225,17 @@
             </article>
             <article class="panel">
               <h3>Commission</h3>
-              <div class="row"><span>Total Invites</span><b>42</b></div>
-              <div class="row"><span>Converted Clients</span><b>12</b></div>
+              <div class="row"><span>Total Invites</span><b data-referral-invites>0</b></div>
+              <div class="row"><span>Converted Clients</span><b data-referral-conversions>0</b></div>
               <div class="row"><span>Available</span><b class="ok" data-commission-total>$0.00</b></div>
-              <button class="danger-btn wide" type="button">Request Withdrawal</button>
+              <form class="mini-form" data-commission-form>
+                <label>Payout Method<input type="text" name="payout_method" placeholder="GCash, BPI, USDT" required /></label>
+                <label>Payout Details<input type="text" name="payout_details" placeholder="Account number, wallet, or notes" /></label>
+                <button class="danger-btn wide" type="submit">Request Withdrawal</button>
+              </form>
+              <div data-commission-requests-list>
+                <p class="codebox">No withdrawal request yet.</p>
+              </div>
             </article>
           </div>
         </div>
