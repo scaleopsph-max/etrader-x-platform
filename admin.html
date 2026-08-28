@@ -79,16 +79,16 @@
         <div data-admin-shell class="hidden">
         <div class="portal-tab active" id="admin-overview">
           <div class="stat-grid">
-            <article><span>Pending Payments</span><strong>18</strong><small>Needs review today</small></article>
-            <article><span>Active Clients</span><strong>1,894</strong><small>Telegram migration target</small></article>
-            <article><span>Monthly Revenue</span><strong>$8,420</strong><small>Manual approval flow</small></article>
+            <article><span>Pending Payments</span><strong data-report-pending-payments>0</strong><small>Needs review</small></article>
+            <article><span>Active Subscriptions</span><strong data-report-active-subscriptions>0</strong><small>Live access records</small></article>
+            <article><span>Approved Revenue</span><strong data-report-approved-revenue>$0.00</strong><small>Verified payments</small></article>
           </div>
           <div class="content-grid">
             <article class="panel">
               <h3>Priority Queue</h3>
-              <div class="row"><span>GCash proof for Premium Plan</span><b class="warn">Review</b></div>
-              <div class="row"><span>USDT TRC20 for VIP Signal</span><b class="warn">Review</b></div>
-              <div class="row"><span>Commission withdrawal request</span><b class="warn">Review</b></div>
+              <div data-admin-priority-list>
+                <p class="codebox">Admin metrics load after sign in.</p>
+              </div>
             </article>
             <article class="panel">
               <h3>Quick Actions</h3>
@@ -223,9 +223,23 @@
 
         <div class="portal-tab" id="admin-reports">
           <div class="stat-grid">
-            <article><span>Sales Today</span><strong>$920</strong><small>4 approved payments</small></article>
-            <article><span>Pending Revenue</span><strong>$2,100</strong><small>Awaiting review</small></article>
-            <article><span>Renewals Due</span><strong>26</strong><small>Next 7 days</small></article>
+            <article><span>Payments Today</span><strong data-report-payments-today>0</strong><small>Submitted today</small></article>
+            <article><span>Pending Revenue</span><strong data-report-pending-revenue>$0.00</strong><small>Awaiting review</small></article>
+            <article><span>Renewals Due</span><strong data-report-renewals-due>0</strong><small>Next 7 days</small></article>
+          </div>
+          <div class="content-grid">
+            <article class="panel">
+              <h3>Operations Health</h3>
+              <div data-admin-health-list>
+                <p class="codebox">Admin reports load after sign in.</p>
+              </div>
+            </article>
+            <article class="panel">
+              <h3>Revenue Mix</h3>
+              <div data-admin-revenue-list>
+                <p class="codebox">No sales data yet.</p>
+              </div>
+            </article>
           </div>
           <article class="panel">
             <h3>Report Exports</h3>

@@ -24,6 +24,9 @@
   const adminReferralList = document.querySelector("[data-admin-referral-list]");
   const adminCommissionQueue = document.querySelector("[data-admin-commission-queue]");
   const adminSupportQueue = document.querySelector("[data-admin-support-queue]");
+  const adminPriorityList = document.querySelector("[data-admin-priority-list]");
+  const adminHealthList = document.querySelector("[data-admin-health-list]");
+  const adminRevenueList = document.querySelector("[data-admin-revenue-list]");
   const clientAuthGate = document.querySelector("[data-client-auth-gate]");
   const clientAppShell = document.querySelector("[data-client-app-shell]");
   const clientFlowAlert = document.querySelector("[data-client-flow-alert]");
@@ -575,7 +578,7 @@
   async function loadAdminData() {
     if (!requireAdmin(false)) return;
 
-    const [products, plans, payments, referrals, commissionRequests, supportTickets] = await Promise.all([
+    const [products, plans, payments, referrals, commissionRequests, supportTickets, subscriptions, orders] = await Promise.all([
       client.from("products").select("*").order("sort_order", { ascending: true }),
       client.from("plans").select("*,products(name,code)").order("created_at", { ascending: false }),
       client
@@ -598,10 +601,20 @@
         .select("id,client_id,subject,message,status,created_at,updated_at,profiles!support_tickets_client_id_fkey(full_name,email,telegram_username)")
         .order("created_at", { ascending: false })
         .limit(30),
+      client
+        .from("subscriptions")
+        .select("id,status,expires_at,created_at,products(name),plans(name),profiles!subscriptions_client_id_fkey(full_name,email)")
+        .order("created_at", { ascending: false })
+        .limit(100),
+      client
+        .from("orders")
+        .select("id,status,total_amount,currency,created_at,plans(name,products(name)),profiles!orders_client_id_fkey(full_name,email)")
+        .order("created_at", { ascending: false })
+        .limit(100),
     ]);
 
-    if (products.error || plans.error || payments.error || referrals.error || commissionRequests.error || supportTickets.error) {
-      setStatus(products.error?.message || plans.error?.message || payments.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message, "warn");
+    if (products.error || plans.error || payments.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error) {
+      setStatus(products.error?.message || plans.error?.message || payments.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message, "warn");
       return;
     }
 
@@ -615,6 +628,16 @@
     bindAdminPaymentActions();
     bindAdminCommissionActions();
     bindAdminSupportActions();
+    renderAdminReports({
+      products: products.data || [],
+      plans: plans.data || [],
+      payments: payments.data || [],
+      referrals: referrals.data || [],
+      commissionRequests: commissionRequests.data || [],
+      supportTickets: supportTickets.data || [],
+      subscriptions: subscriptions.data || [],
+      orders: orders.data || [],
+    });
   }
 
   function bindAdminPaymentActions() {
@@ -646,6 +669,79 @@
         await rejectPayment(paymentId);
       });
     });
+  }
+
+  function renderAdminReports(snapshot) {
+    const pendingPayments = snapshot.payments.filter((payment) => ["pending", "under_review"].includes(payment.status));
+    const approvedPayments = snapshot.payments.filter((payment) => payment.status === "approved");
+    const paymentsToday = snapshot.payments.filter((payment) => isToday(payment.created_at));
+    const activeSubscriptions = snapshot.subscriptions.filter((subscription) => ["active", "trial"].includes(subscription.status));
+    const renewalsDue = activeSubscriptions.filter((subscription) => isWithinDays(subscription.expires_at, 7));
+    const openSupport = snapshot.supportTickets.filter((ticket) => ["open", "pending_admin", "pending_client"].includes(ticket.status));
+    const pendingCommissionRequests = snapshot.commissionRequests.filter((request) => request.status === "requested");
+    const pendingRevenue = pendingPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const approvedRevenue = approvedPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const commissionLiability = snapshot.referrals
+      .filter((referral) => ["available", "requested", "approved"].includes(referral.commission_status))
+      .reduce((sum, referral) => sum + Number(referral.commission_amount || 0), 0);
+
+    setText("[data-report-pending-payments]", String(pendingPayments.length));
+    setText("[data-report-active-subscriptions]", String(activeSubscriptions.length));
+    setText("[data-report-approved-revenue]", formatMoney(approvedRevenue, "USD"));
+    setText("[data-report-payments-today]", String(paymentsToday.length));
+    setText("[data-report-pending-revenue]", formatMoney(pendingRevenue, "USD"));
+    setText("[data-report-renewals-due]", String(renewalsDue.length));
+
+    renderListElement(
+      adminPriorityList,
+      buildPriorityRows({ pendingPayments, pendingCommissionRequests, openSupport, renewalsDue }),
+      renderMetricRow,
+      "No urgent admin actions right now."
+    );
+
+    renderListElement(
+      adminHealthList,
+      [
+        ["Open support tickets", String(openSupport.length), openSupport.length ? "warn" : "ok"],
+        ["Commission liability", formatMoney(commissionLiability, "USD"), commissionLiability ? "warn" : "ok"],
+        ["Active products", String(snapshot.products.filter((product) => product.status === "active").length), "ok"],
+        ["Published plans", String(snapshot.plans.filter((plan) => plan.status === "active").length), "ok"],
+      ],
+      renderMetricRow,
+      "No operations metrics yet."
+    );
+
+    renderListElement(
+      adminRevenueList,
+      buildRevenueRows(approvedPayments),
+      renderMetricRow,
+      "No approved payments yet."
+    );
+  }
+
+  function buildPriorityRows({ pendingPayments, pendingCommissionRequests, openSupport, renewalsDue }) {
+    return [
+      pendingPayments.length ? ["Payment proofs", `${pendingPayments.length} to review`, "warn"] : null,
+      pendingCommissionRequests.length ? ["Commission withdrawals", `${pendingCommissionRequests.length} requested`, "warn"] : null,
+      openSupport.length ? ["Support tickets", `${openSupport.length} open`, "warn"] : null,
+      renewalsDue.length ? ["Renewals due", `${renewalsDue.length} within 7 days`, "warn"] : null,
+    ].filter(Boolean);
+  }
+
+  function buildRevenueRows(payments) {
+    const totals = new Map();
+    payments.forEach((payment) => {
+      const product = payment.orders?.plans?.products?.name || "Unassigned Product";
+      totals.set(product, (totals.get(product) || 0) + Number(payment.amount || 0));
+    });
+
+    return Array.from(totals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([product, amount]) => [product, formatMoney(amount, "USD"), "ok"]);
+  }
+
+  function renderMetricRow([label, value, tone]) {
+    return `<div class="row"><span>${escapeHtml(label)}</span><b class="${escapeHtml(tone || "")}">${escapeHtml(value)}</b></div>`;
   }
 
   function bindAdminCommissionActions() {
@@ -1205,6 +1301,21 @@
 
   function formatDate(value) {
     return value ? new Date(value).toLocaleDateString() : "No expiry";
+  }
+
+  function isToday(value) {
+    if (!value) return false;
+    const date = new Date(value);
+    const today = new Date();
+    return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth() && date.getDate() === today.getDate();
+  }
+
+  function isWithinDays(value, days) {
+    if (!value) return false;
+    const date = new Date(value);
+    const now = new Date();
+    const diff = date.getTime() - now.getTime();
+    return diff >= 0 && diff <= days * 86400000;
   }
 
   function escapeHtml(value) {
