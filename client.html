@@ -4,20 +4,196 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Client Portal | ETrader-X</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="section-band">
-      <p class="eyebrow">Client portal preview</p>
-      <h1>Client side module comes next.</h1>
-      <p class="hero-lead">
-        This route is reserved for login, profile, buying flow, payment proof upload,
-        subscriptions, referrals, commissions, and support.
-      </p>
-      <div class="hero-actions">
-        <a class="primary-btn large" href="index.html#plans">Back to Plans</a>
-        <a class="secondary-btn large" href="admin.html">Admin Preview</a>
+    <header class="site-header">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">ETX</span>
+        <span>
+          <strong>ETrader-X</strong>
+          <small>Client Portal</small>
+        </span>
+      </a>
+      <div class="header-actions">
+        <a class="ghost-btn" href="index.html#plans">Products</a>
+        <a class="danger-btn" href="admin.html">Admin</a>
       </div>
+    </header>
+
+    <main class="portal-layout">
+      <aside class="portal-sidebar">
+        <strong>Client Side</strong>
+        <button class="active" data-tab="overview">Overview</button>
+        <button data-tab="profile">Profile</button>
+        <button data-tab="buy">Subscribe / Buy</button>
+        <button data-tab="payments">Payments</button>
+        <button data-tab="subscriptions">Subscriptions</button>
+        <button data-tab="referrals">Referral</button>
+        <button data-tab="support">Support</button>
+      </aside>
+
+      <section class="portal-workspace">
+        <div class="portal-hero">
+          <div>
+            <p class="eyebrow">Client MVP</p>
+            <h1>Manage ETX access, payments, and referrals.</h1>
+            <p class="hero-lead">
+              Prototype flow for clients: login, select product, submit payment proof,
+              wait for approval, then track active subscriptions.
+            </p>
+          </div>
+          <form class="login-card" aria-label="Client login form">
+            <strong>Quick Login Preview</strong>
+            <label>
+              Email or Client ID
+              <input type="text" value="client@etrader-x.com" />
+            </label>
+            <label>
+              Password
+              <input type="password" value="previewonly" />
+            </label>
+            <button class="primary-btn" type="button">Enter Portal</button>
+          </form>
+        </div>
+
+        <div class="portal-tab active" id="overview">
+          <div class="stat-grid">
+            <article><span>Active Products</span><strong>3</strong><small>EA, VIP Signal, Trial</small></article>
+            <article><span>Payment Status</span><strong>Pending</strong><small>1 proof under review</small></article>
+            <article><span>Referral Balance</span><strong>$240</strong><small>Eligible for request</small></article>
+          </div>
+          <div class="content-grid">
+            <article class="panel">
+              <h3>Next Action</h3>
+              <div class="row"><span>VIP Signal renewal</span><b class="warn">5 days left</b></div>
+              <div class="row"><span>Payment proof review</span><b class="warn">Pending</b></div>
+              <div class="row"><span>Referral payout</span><b class="ok">Available</b></div>
+            </article>
+            <article class="panel">
+              <h3>Client Access</h3>
+              <p class="codebox">ETX-CLIENT-2048</p>
+              <button class="secondary-btn wide" type="button">Copy Client ID</button>
+            </article>
+          </div>
+        </div>
+
+        <div class="portal-tab" id="profile">
+          <article class="panel form-panel">
+            <h3>Client Profile</h3>
+            <div class="form-grid">
+              <label>Full Name<input type="text" value="Richmond Sevilla" /></label>
+              <label>Email<input type="email" value="client@etrader-x.com" /></label>
+              <label>Telegram Username<input type="text" value="@etx_client" /></label>
+              <label>Referral Code<input type="text" value="RICH-2048" /></label>
+            </div>
+            <button class="primary-btn" type="button">Save Profile</button>
+          </article>
+        </div>
+
+        <div class="portal-tab" id="buy">
+          <div class="buy-grid">
+            <article class="product-card featured">
+              <span class="product-code">SAFY EA</span>
+              <h3>ETX SAFY Expert Advisor</h3>
+              <p>Basic, Advance, Premium, and Promo access.</p>
+              <button class="primary-btn wide" type="button" data-plan="ETX SAFY EA - Premium Plan - $300">Select Premium</button>
+            </article>
+            <article class="product-card">
+              <span class="product-code">VIP</span>
+              <h3>ETX VIP Signal</h3>
+              <p>Monthly signal subscription with promo duration options.</p>
+              <button class="primary-btn wide" type="button" data-plan="ETX VIP Signal - 12 months + 2 free - $400">Select VIP Promo</button>
+            </article>
+            <article class="product-card">
+              <span class="product-code">YUGO</span>
+              <h3>Yugo Ashi Indicator</h3>
+              <p>Free trial and paid renewal path.</p>
+              <button class="secondary-btn wide" type="button" data-plan="Yugo Ashi Indicator - 7 Day Trial - Free">Start Trial</button>
+            </article>
+          </div>
+          <article class="panel order-panel">
+            <h3>Selected Order</h3>
+            <p class="codebox" id="selected-plan">No selected product yet.</p>
+            <button class="danger-btn" type="button" data-jump="payments">Proceed to Payment</button>
+          </article>
+        </div>
+
+        <div class="portal-tab" id="payments">
+          <article class="panel form-panel">
+            <h3>Submit Payment Proof</h3>
+            <div class="form-grid">
+              <label>
+                Payment Method
+                <select>
+                  <option>GCash</option>
+                  <option>BPI Bank Transfer</option>
+                  <option>USDT BEP20 / BSC</option>
+                  <option>USDT TRC20</option>
+                </select>
+              </label>
+              <label>
+                Transaction Reference
+                <input type="text" placeholder="Reference number or TX hash" />
+              </label>
+              <label>
+                Amount
+                <input type="text" placeholder="$300 or PHP equivalent" />
+              </label>
+              <label>
+                Upload Proof
+                <input type="file" />
+              </label>
+            </div>
+            <button class="primary-btn" type="button">Submit For Admin Review</button>
+          </article>
+        </div>
+
+        <div class="portal-tab" id="subscriptions">
+          <article class="panel">
+            <h3>My Subscriptions</h3>
+            <div class="row"><span>ETX Expert Advisor</span><b class="ok">Active until Sep 28, 2026</b></div>
+            <div class="row"><span>ETX VIP Signal</span><b class="warn">Expires in 5 days</b></div>
+            <div class="row"><span>Yugo Ashi Indicator</span><b class="ok">Trial active</b></div>
+          </article>
+        </div>
+
+        <div class="portal-tab" id="referrals">
+          <div class="content-grid">
+            <article class="panel">
+              <h3>Referral Program</h3>
+              <p class="codebox">https://etrader-x-platform.pages.dev/?ref=RICH-2048</p>
+              <button class="secondary-btn wide" type="button">Copy Referral Link</button>
+            </article>
+            <article class="panel">
+              <h3>Commission</h3>
+              <div class="row"><span>Total Invites</span><b>42</b></div>
+              <div class="row"><span>Converted Clients</span><b>12</b></div>
+              <div class="row"><span>Available</span><b class="ok">$240</b></div>
+              <button class="danger-btn wide" type="button">Request Withdrawal</button>
+            </article>
+          </div>
+        </div>
+
+        <div class="portal-tab" id="support">
+          <article class="panel form-panel">
+            <h3>Support Request</h3>
+            <div class="form-grid single">
+              <label>Subject<input type="text" placeholder="Subscription, payment, referral, or access issue" /></label>
+              <label>Message<textarea placeholder="Describe your concern"></textarea></label>
+            </div>
+            <button class="secondary-btn" type="button">Send Request</button>
+          </article>
+        </div>
+      </section>
     </main>
+
+    <script src="portal.js"></script>
   </body>
 </html>
