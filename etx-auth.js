@@ -19,6 +19,8 @@
   const adminPlansList = document.querySelector("[data-admin-plans-list]");
   const adminPaymentQueue = document.querySelector("[data-admin-payment-queue]");
   const adminPlanProductSelect = document.querySelector("[data-admin-plan-product]");
+  const clientAuthGate = document.querySelector("[data-client-auth-gate]");
+  const clientAppShell = document.querySelector("[data-client-app-shell]");
 
   if (!sdk || !config.url || !config.publishableKey) {
     setStatus("Supabase config is missing. Add the project URL and publishable key first.", "warn");
@@ -368,6 +370,7 @@
 
   function renderSignedOut() {
     authPanels.forEach((panel) => panel.classList.toggle("is-signed-in", false));
+    toggleClientShell(false);
     setText("[data-auth-email]", "Not signed in");
     setStatus("Sign in or create a client account to continue.", "warn");
     renderAdminGate(null);
@@ -375,8 +378,15 @@
 
   function renderSignedIn() {
     authPanels.forEach((panel) => panel.classList.toggle("is-signed-in", true));
+    toggleClientShell(true);
     setText("[data-auth-email]", currentUser.email || "Signed in");
     renderProfile(currentProfile);
+  }
+
+  function toggleClientShell(isSignedIn) {
+    if (!clientAuthGate || !clientAppShell) return;
+    clientAuthGate.classList.toggle("hidden", isSignedIn);
+    clientAppShell.classList.toggle("hidden", !isSignedIn);
   }
 
   function renderProfile(profile) {

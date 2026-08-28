@@ -26,7 +26,45 @@
       </div>
     </header>
 
-    <main class="portal-layout">
+    <main class="client-auth-gate" data-client-auth-gate>
+      <section class="auth-landing">
+        <div>
+          <p class="eyebrow">Client access</p>
+          <h1>Login or create your ETrader-X client account.</h1>
+          <p class="hero-lead">
+            After sign in, your dashboard, subscriptions, payment upload, referral code,
+            and support tools will appear.
+          </p>
+          <p class="codebox warn" data-auth-status>Checking session...</p>
+        </div>
+
+        <div class="auth-card-grid">
+          <form class="login-card" aria-label="Client login form" data-sign-in-form>
+            <strong>Client Login</strong>
+            <label>
+              Email
+              <input type="email" name="email" autocomplete="email" required />
+            </label>
+            <label>
+              Password
+              <input type="password" name="password" autocomplete="current-password" required />
+            </label>
+            <button class="primary-btn" type="submit">Enter Client Portal</button>
+          </form>
+
+          <form class="login-card" aria-label="Client signup form" data-sign-up-form>
+            <strong>Create Client Account</strong>
+            <label>Full Name<input type="text" name="full_name" autocomplete="name" required /></label>
+            <label>Email<input type="email" name="email" autocomplete="email" required /></label>
+            <label>Telegram Username<input type="text" name="telegram_username" placeholder="@username" /></label>
+            <label>Password<input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
+            <button class="danger-btn" type="submit">Create Account</button>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <main class="portal-layout hidden" data-client-app-shell>
       <aside class="portal-sidebar">
         <strong>Client Side</strong>
         <button class="active" data-tab="overview">Overview</button>
@@ -48,23 +86,14 @@
               wait for approval, then track active subscriptions.
             </p>
           </div>
-          <form class="login-card" aria-label="Client login form" data-sign-in-form>
-            <strong>Client Sign In</strong>
-            <label>
-              Email
-              <input type="email" name="email" autocomplete="email" required />
-            </label>
-            <label>
-              Password
-              <input type="password" name="password" autocomplete="current-password" required />
-            </label>
-            <button class="primary-btn" type="submit">Enter Portal</button>
+          <article class="login-card">
+            <strong>Signed In</strong>
+            <p class="codebox">Account: <span data-auth-email>Not signed in</span></p>
             <button class="secondary-btn" type="button" data-sign-out>Sign Out</button>
-          </form>
+          </article>
         </div>
 
-        <p class="codebox warn" data-auth-status>Checking session...</p>
-        <p class="codebox">Account: <span data-auth-email>Not signed in</span></p>
+        <p class="codebox ok" data-auth-status>Client portal ready.</p>
 
         <div class="portal-tab active" id="overview">
           <div class="stat-grid">
@@ -89,17 +118,6 @@
 
         <div class="portal-tab" id="profile">
           <article class="panel form-panel">
-            <h3>Create Client Account</h3>
-            <form class="form-grid" data-sign-up-form>
-              <label>Full Name<input type="text" name="full_name" autocomplete="name" required /></label>
-              <label>Email<input type="email" name="email" autocomplete="email" required /></label>
-              <label>Telegram Username<input type="text" name="telegram_username" placeholder="@username" /></label>
-              <label>Password<input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
-              <button class="primary-btn" type="submit">Create Account</button>
-            </form>
-          </article>
-
-          <article class="panel form-panel order-panel">
             <h3>Client Profile</h3>
             <form data-profile-form>
               <div class="form-grid">
