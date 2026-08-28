@@ -96,6 +96,13 @@
         </div>
 
         <p class="codebox ok" data-auth-status>Client portal ready.</p>
+        <div class="flow-tracker" aria-label="Subscription process">
+          <span class="active" data-flow-step="select">1. Select Plan</span>
+          <span data-flow-step="payment">2. Submit Payment</span>
+          <span data-flow-step="verification">3. Admin Verification</span>
+          <span data-flow-step="subscription">4. Subscription Active</span>
+        </div>
+        <p class="codebox" data-client-flow-alert>Select a plan to start your subscription request.</p>
 
         <div class="portal-tab active" id="overview">
           <div class="stat-grid">
@@ -106,9 +113,11 @@
           <div class="content-grid">
             <article class="panel">
               <h3>Next Action</h3>
-              <div class="row"><span>VIP Signal renewal</span><b class="warn">5 days left</b></div>
-              <div class="row"><span>Payment proof review</span><b class="warn">Pending</b></div>
-              <div class="row"><span>Referral payout</span><b class="ok">Available</b></div>
+              <div data-client-next-actions>
+                <div class="row"><span>Choose a plan</span><b class="warn">Required</b></div>
+                <div class="row"><span>Submit payment proof</span><b class="warn">Waiting</b></div>
+                <div class="row"><span>Admin verification</span><b>Not started</b></div>
+              </div>
             </article>
             <article class="panel">
               <h3>Client Access</h3>
@@ -147,6 +156,7 @@
         <div class="portal-tab" id="payments">
           <article class="panel form-panel">
             <h3>Submit Payment Proof</h3>
+            <p class="codebox" data-payment-context>No selected plan yet. Select a plan first.</p>
             <form data-payment-form>
               <div class="form-grid">
                 <label>
@@ -191,6 +201,12 @@
             <h3>My Orders</h3>
             <div data-orders-list>
               <p class="codebox">Sign in to view orders.</p>
+            </div>
+          </article>
+          <article class="panel order-panel">
+            <h3>Payment Verification</h3>
+            <div data-payments-list>
+              <p class="codebox">Submitted payments will appear here.</p>
             </div>
           </article>
         </div>

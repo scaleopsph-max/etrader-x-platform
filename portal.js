@@ -15,6 +15,8 @@ function activateTab(id) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+window.activatePortalTab = activateTab;
+
 tabButtons.forEach((button) => {
   button.addEventListener("click", () => activateTab(button.dataset.tab));
 });

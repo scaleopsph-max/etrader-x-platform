@@ -2,7 +2,7 @@
   const config = window.ETX_SUPABASE || {};
   const sdk = window.supabase;
   const authPanels = document.querySelectorAll("[data-auth-panel]");
-  const authStatus = document.querySelector("[data-auth-status]");
+  const authStatuses = document.querySelectorAll("[data-auth-status]");
   const authUser = document.querySelector("[data-auth-user]");
   const profileForm = document.querySelector("[data-profile-form]");
   const signInForm = document.querySelector("[data-sign-in-form]");
@@ -23,6 +23,9 @@
   const adminPlanProductSelect = document.querySelector("[data-admin-plan-product]");
   const clientAuthGate = document.querySelector("[data-client-auth-gate]");
   const clientAppShell = document.querySelector("[data-client-app-shell]");
+  const clientFlowAlert = document.querySelector("[data-client-flow-alert]");
+  const paymentContext = document.querySelector("[data-payment-context]");
+  const clientNextActions = document.querySelector("[data-client-next-actions]");
 
   if (!sdk || !config.url || !config.publishableKey) {
     setStatus("Supabase config is missing. Add the project URL and publishable key first.", "warn");
@@ -40,6 +43,10 @@
   let currentUser = null;
   let currentProfile = null;
   let currentPlan = null;
+  let lastClientSnapshot = {
+    hasPendingPayment: false,
+    hasActiveSubscription: false,
+  };
 
   document.addEventListener("DOMContentLoaded", init);
 
@@ -238,6 +245,8 @@
 
       paymentForm.reset();
       setStatus("Payment submitted for admin review.", "ok");
+      setClientFlow("verification", "Payment received. Please wait while admin verifies your payment proof.");
+      goToTab("subscriptions");
       await hydrateClientData();
     });
   }
@@ -366,7 +375,13 @@
           selectedPlan.textContent = `${currentPlan.product_name} - ${currentPlan.name} - ${formatMoney(currentPlan.price_amount, currentPlan.currency)}`;
         }
 
+        if (paymentContext) {
+          paymentContext.textContent = `${currentPlan.product_name} / ${currentPlan.name} / ${formatMoney(currentPlan.price_amount, currentPlan.currency)}`;
+        }
+
         setStatus("Plan selected. Continue to payment when ready.", "ok");
+        setClientFlow("payment", "Plan selected. Complete payment details and upload proof for admin verification.");
+        goToTab("payments");
       });
     });
   }
@@ -374,14 +389,18 @@
   async function hydrateClientData() {
     if (!currentUser) return;
 
-    const [orders, subscriptions, referrals] = await Promise.all([
+    const [orders, payments, subscriptions, referrals] = await Promise.all([
       client.from("orders").select("id,status,total_amount,currency,created_at,plans(name,products(name))").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
+      client.from("payments").select("id,status,amount,currency,transaction_reference,created_at,orders(plans(name,products(name)))").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("subscriptions").select("status,expires_at,products(name),plans(name)").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("referrals").select("commission_amount,commission_status").eq("referrer_id", currentUser.id),
     ]);
 
     renderList("[data-orders-list]", orders.data, renderOrderRow, "No orders yet.");
+    renderList("[data-payments-list]", payments.data, renderPaymentRow, "No payment submitted yet.");
     renderList("[data-subscriptions-list]", subscriptions.data, renderSubscriptionRow, "No subscriptions yet.");
+
+    syncClientFlowState(orders.data || [], payments.data || [], subscriptions.data || []);
 
     const totalCommission = (referrals.data || []).reduce((sum, item) => sum + Number(item.commission_amount || 0), 0);
     setText("[data-referral-code]", currentProfile?.referral_code || "Pending");
@@ -394,6 +413,7 @@
     toggleClientShell(false);
     setText("[data-auth-email]", "Not signed in");
     setStatus("Sign in or create a client account to continue.", "warn");
+    setClientFlow("select", "Sign in or create a client account to continue.");
     renderAdminGate(null);
   }
 
@@ -402,6 +422,7 @@
     toggleClientShell(true);
     setText("[data-auth-email]", currentUser.email || "Signed in");
     renderProfile(currentProfile);
+    setClientFlow("select", "Select a plan to start your subscription request.");
   }
 
   function toggleClientShell(isSignedIn) {
@@ -649,12 +670,101 @@
   }
 
   function renderOrderRow(order) {
-    return `<div class="row"><span>${escapeHtml(order.plans?.products?.name || "ETX Product")} / ${escapeHtml(order.plans?.name || "Plan")}</span><b class="warn">${escapeHtml(order.status)}</b></div>`;
+    return `<div class="row"><span>${escapeHtml(order.plans?.products?.name || "ETX Product")} / ${escapeHtml(order.plans?.name || "Plan")}</span><b class="${statusClass(order.status)}">${escapeHtml(formatStatus(order.status))}</b></div>`;
   }
 
   function renderSubscriptionRow(subscription) {
     const expiry = subscription.expires_at ? new Date(subscription.expires_at).toLocaleDateString() : "No expiry";
     return `<div class="row"><span>${escapeHtml(subscription.products?.name || "ETX Product")}</span><b class="ok">${escapeHtml(subscription.status)} until ${escapeHtml(expiry)}</b></div>`;
+  }
+
+  function renderPaymentRow(payment) {
+    return `<div class="row"><span>${escapeHtml(payment.orders?.plans?.products?.name || "ETX Product")} / ${escapeHtml(payment.transaction_reference || "No reference")}</span><b class="${statusClass(payment.status)}">${escapeHtml(formatStatus(payment.status))}</b></div>`;
+  }
+
+  function syncClientFlowState(orders, payments, subscriptions) {
+    const latestPayment = payments[0];
+    const hasPendingPayment = payments.some((payment) => ["pending", "under_review"].includes(payment.status));
+    const hasActiveSubscription = subscriptions.some((subscription) => ["active", "trial"].includes(subscription.status));
+
+    if (hasActiveSubscription) {
+      setClientFlow("subscription", "Congratulations. Your subscription is now active and reflected in your account.");
+    } else if (latestPayment?.status === "rejected") {
+      setClientFlow("payment", "Payment was rejected. Please submit corrected payment details or proof.");
+    } else if (hasPendingPayment || orders.some((order) => ["pending_payment", "under_review"].includes(order.status))) {
+      setClientFlow("verification", "Payment submitted. Please wait for admin verification.");
+    } else if (!currentPlan) {
+      setClientFlow("select", "Select a plan to start your subscription request.");
+    }
+
+    if (!lastClientSnapshot.hasActiveSubscription && hasActiveSubscription) {
+      goToTab("subscriptions");
+    }
+
+    lastClientSnapshot = { hasPendingPayment, hasActiveSubscription };
+  }
+
+  function setClientFlow(step, message) {
+    document.querySelectorAll("[data-flow-step]").forEach((item) => {
+      item.classList.toggle("active", item.dataset.flowStep === step);
+      item.classList.toggle("complete", flowStepOrder(item.dataset.flowStep) < flowStepOrder(step));
+    });
+
+    if (clientFlowAlert) {
+      clientFlowAlert.textContent = message;
+      clientFlowAlert.className = `codebox ${step === "subscription" ? "ok" : step === "verification" ? "warn" : ""}`.trim();
+    }
+
+    if (clientNextActions) {
+      clientNextActions.innerHTML = renderNextActions(step);
+    }
+  }
+
+  function renderNextActions(step) {
+    const rows = {
+      select: [
+        ["Choose a plan", "Required", "warn"],
+        ["Submit payment proof", "Waiting", ""],
+        ["Admin verification", "Not started", ""],
+      ],
+      payment: [
+        ["Choose a plan", "Done", "ok"],
+        ["Submit payment proof", "Required", "warn"],
+        ["Admin verification", "Waiting", ""],
+      ],
+      verification: [
+        ["Choose a plan", "Done", "ok"],
+        ["Submit payment proof", "Done", "ok"],
+        ["Admin verification", "In review", "warn"],
+      ],
+      subscription: [
+        ["Choose a plan", "Done", "ok"],
+        ["Submit payment proof", "Done", "ok"],
+        ["Admin verification", "Approved", "ok"],
+      ],
+    }[step] || [];
+
+    return rows.map(([label, value, tone]) => `<div class="row"><span>${escapeHtml(label)}</span><b class="${tone}">${escapeHtml(value)}</b></div>`).join("");
+  }
+
+  function goToTab(tabId) {
+    if (typeof window.activatePortalTab === "function") {
+      window.activatePortalTab(tabId);
+    }
+  }
+
+  function flowStepOrder(step) {
+    return { select: 1, payment: 2, verification: 3, subscription: 4 }[step] || 0;
+  }
+
+  function statusClass(status) {
+    if (["approved", "active", "trial"].includes(status)) return "ok";
+    if (["rejected", "cancelled", "expired"].includes(status)) return "rejected";
+    return "warn";
+  }
+
+  function formatStatus(status) {
+    return String(status || "").replace(/_/g, " ");
   }
 
   function renderAdminProductRow(product) {
@@ -721,9 +831,10 @@
   }
 
   function setStatus(message, tone) {
-    if (!authStatus) return;
-    authStatus.textContent = message;
-    authStatus.className = `codebox${tone ? ` ${tone}` : ""}`;
+    authStatuses.forEach((authStatus) => {
+      authStatus.textContent = message;
+      authStatus.className = `codebox${tone ? ` ${tone}` : ""}`;
+    });
   }
 
   function setText(selector, value) {

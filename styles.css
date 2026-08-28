@@ -694,6 +694,38 @@ textarea {
   padding: 14px;
 }
 
+.flow-tracker {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.flow-tracker span {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), transparent 34%),
+    rgba(5, 11, 16, 0.42);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.flow-tracker span.complete {
+  border-color: rgba(53, 232, 143, 0.36);
+  color: var(--green);
+}
+
+.flow-tracker span.active {
+  border-color: rgba(25, 216, 255, 0.55);
+  background: rgba(25, 216, 255, 0.14);
+  color: var(--cyan);
+}
+
 .wide {
   width: 100%;
 }
@@ -798,6 +830,7 @@ textarea {
   .content-grid,
   .buy-grid,
   .form-grid,
+  .flow-tracker,
   .approval-card {
     grid-template-columns: 1fr;
   }
