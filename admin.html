@@ -3,21 +3,226 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Admin Portal | ETrader-X</title>
+    <title>Private Admin | ETrader-X</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="section-band">
-      <p class="eyebrow">Admin portal preview</p>
-      <h1>Admin side module comes next.</h1>
-      <p class="hero-lead">
-        This route is reserved for product creation, pricing, client management,
-        payment approvals, subscription activation, commission requests, and reports.
-      </p>
-      <div class="hero-actions">
-        <a class="danger-btn large" href="index.html">Back to Home</a>
-        <a class="secondary-btn large" href="client.html">Client Preview</a>
+    <header class="site-header">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">ETX</span>
+        <span>
+          <strong>ETrader-X</strong>
+          <small>Private Operations</small>
+        </span>
+      </a>
+      <div class="header-actions">
+        <a class="ghost-btn" href="index.html">Home</a>
+        <a class="secondary-btn" href="client.html">Client Preview</a>
       </div>
+    </header>
+
+    <main class="portal-layout admin-portal">
+      <aside class="portal-sidebar admin-sidebar">
+        <strong>Admin Control</strong>
+        <button class="active" data-tab="admin-overview">Overview</button>
+        <button data-tab="admin-products">Products</button>
+        <button data-tab="admin-plans">Plans & Pricing</button>
+        <button data-tab="admin-payments">Payment Queue</button>
+        <button data-tab="admin-clients">Clients</button>
+        <button data-tab="admin-subscriptions">Subscriptions</button>
+        <button data-tab="admin-referrals">Referrals</button>
+        <button data-tab="admin-reports">Reports</button>
+      </aside>
+
+      <section class="portal-workspace">
+        <div class="portal-hero">
+          <div>
+            <p class="eyebrow danger-text">Private admin MVP</p>
+            <h1>Control products, payments, clients, and subscription access.</h1>
+            <p class="hero-lead">
+              Admin side is hidden from public UI. In the real build, Supabase Auth and role policies
+              will protect this route before any data can be viewed or changed.
+            </p>
+          </div>
+          <form class="login-card admin-login-card" aria-label="Admin verification form">
+            <strong>Admin Access Preview</strong>
+            <label>
+              Admin Email
+              <input type="email" value="admin@etrader-x.com" />
+            </label>
+            <label>
+              Security Code
+              <input type="password" value="previewonly" />
+            </label>
+            <button class="danger-btn" type="button">Verify Admin</button>
+          </form>
+        </div>
+
+        <div class="portal-tab active" id="admin-overview">
+          <div class="stat-grid">
+            <article><span>Pending Payments</span><strong>18</strong><small>Needs review today</small></article>
+            <article><span>Active Clients</span><strong>1,894</strong><small>Telegram migration target</small></article>
+            <article><span>Monthly Revenue</span><strong>$8,420</strong><small>Manual approval flow</small></article>
+          </div>
+          <div class="content-grid">
+            <article class="panel">
+              <h3>Priority Queue</h3>
+              <div class="row"><span>GCash proof for Premium Plan</span><b class="warn">Review</b></div>
+              <div class="row"><span>USDT TRC20 for VIP Signal</span><b class="warn">Review</b></div>
+              <div class="row"><span>Commission withdrawal request</span><b class="warn">Review</b></div>
+            </article>
+            <article class="panel">
+              <h3>Quick Actions</h3>
+              <button class="danger-btn wide" type="button" data-jump="admin-payments">Review Payments</button>
+              <button class="secondary-btn wide" type="button" data-jump="admin-products">Create Product</button>
+              <button class="secondary-btn wide" type="button" data-jump="admin-reports">View Reports</button>
+            </article>
+          </div>
+        </div>
+
+        <div class="portal-tab" id="admin-products">
+          <div class="content-grid">
+            <article class="panel form-panel">
+              <h3>Create Product</h3>
+              <div class="form-grid">
+                <label>Product Name<input type="text" placeholder="ETX SAFY Expert Advisor" /></label>
+                <label>Product Code<input type="text" placeholder="SAFY-EA" /></label>
+                <label>Category<select><option>Expert Advisor</option><option>VIP Signal</option><option>Indicator</option><option>Academy Package</option></select></label>
+                <label>Status<select><option>Active</option><option>Draft</option><option>Hidden</option></select></label>
+              </div>
+              <label>Description<textarea placeholder="Describe access, benefits, rules, and support details."></textarea></label>
+              <button class="primary-btn" type="button">Save Product</button>
+            </article>
+            <article class="panel">
+              <h3>Current Products</h3>
+              <div class="row"><span>ETX SAFY EA</span><b class="ok">Active</b></div>
+              <div class="row"><span>ETX VIP Signal</span><b class="ok">Active</b></div>
+              <div class="row"><span>Yugo Ashi Indicator</span><b class="ok">Active</b></div>
+              <div class="row"><span>Elite X Package</span><b class="warn">Promo</b></div>
+            </article>
+          </div>
+        </div>
+
+        <div class="portal-tab" id="admin-plans">
+          <article class="panel form-panel">
+            <h3>Plans & Pricing</h3>
+            <div class="form-grid">
+              <label>Product<select><option>ETX SAFY EA</option><option>ETX VIP Signal</option><option>Yugo Ashi Indicator</option><option>Elite X Package</option></select></label>
+              <label>Plan Name<input type="text" placeholder="Premium Plan" /></label>
+              <label>Price<input type="text" placeholder="$300" /></label>
+              <label>Duration<select><option>1 month</option><option>3 months</option><option>6 months</option><option>12 months + 2 free</option></select></label>
+            </div>
+            <button class="primary-btn" type="button">Create Plan</button>
+          </article>
+          <article class="panel order-panel">
+            <h3>Published Plans</h3>
+            <div class="row"><span>Basic Plan</span><b>$100</b></div>
+            <div class="row"><span>Advance Plan</span><b>$200</b></div>
+            <div class="row"><span>Premium Plan</span><b>$300</b></div>
+            <div class="row"><span>Promo Plan</span><b>$400</b></div>
+          </article>
+        </div>
+
+        <div class="portal-tab" id="admin-payments">
+          <article class="panel">
+            <h3>Payment Approval Queue</h3>
+            <div class="approval-card" data-payment="GCash - Premium Plan - Maria L.">
+              <div>
+                <strong>Maria L.</strong>
+                <p>GCash proof submitted for ETX SAFY EA Premium Plan.</p>
+              </div>
+              <span class="warn">Pending</span>
+              <button class="primary-btn" type="button" data-approve>Approve</button>
+              <button class="secondary-btn" type="button" data-reject>Reject</button>
+            </div>
+            <div class="approval-card" data-payment="USDT TRC20 - VIP Signal - John P.">
+              <div>
+                <strong>John P.</strong>
+                <p>USDT TRC20 transaction hash submitted for VIP Signal promo.</p>
+              </div>
+              <span class="warn">Pending</span>
+              <button class="primary-btn" type="button" data-approve>Approve</button>
+              <button class="secondary-btn" type="button" data-reject>Reject</button>
+            </div>
+            <p class="codebox" id="admin-action-log">No payment action selected yet.</p>
+          </article>
+        </div>
+
+        <div class="portal-tab" id="admin-clients">
+          <div class="content-grid">
+            <article class="panel">
+              <h3>Client List</h3>
+              <div class="row"><span>Richmond Sevilla</span><b class="ok">Active</b></div>
+              <div class="row"><span>Maria L.</span><b class="warn">Payment review</b></div>
+              <div class="row"><span>John P.</span><b>Expired</b></div>
+              <div class="row"><span>Anna G.</span><b class="ok">Trial</b></div>
+            </article>
+            <article class="panel form-panel">
+              <h3>Add Client</h3>
+              <label>Email<input type="email" placeholder="client@email.com" /></label>
+              <label>Telegram Username<input type="text" placeholder="@username" /></label>
+              <button class="primary-btn" type="button">Create Client</button>
+            </article>
+          </div>
+        </div>
+
+        <div class="portal-tab" id="admin-subscriptions">
+          <article class="panel form-panel">
+            <h3>Activate Subscription</h3>
+            <div class="form-grid">
+              <label>Client<select><option>Maria L.</option><option>John P.</option><option>Richmond Sevilla</option></select></label>
+              <label>Product<select><option>ETX SAFY EA</option><option>ETX VIP Signal</option><option>Yugo Ashi Indicator</option></select></label>
+              <label>Plan<select><option>Premium Plan</option><option>VIP Promo</option><option>Free Trial</option></select></label>
+              <label>Expiry Date<input type="date" value="2026-09-28" /></label>
+            </div>
+            <button class="danger-btn" type="button">Activate Access</button>
+          </article>
+          <article class="panel order-panel">
+            <h3>Expiring Soon</h3>
+            <div class="row"><span>VIP Signal - Richmond Sevilla</span><b class="warn">5 days</b></div>
+            <div class="row"><span>Yugo Ashi - Anna G.</span><b class="warn">2 days</b></div>
+          </article>
+        </div>
+
+        <div class="portal-tab" id="admin-referrals">
+          <div class="content-grid">
+            <article class="panel">
+              <h3>Referral Performance</h3>
+              <div class="row"><span>RICH-2048</span><b class="ok">$240</b></div>
+              <div class="row"><span>MARIA-188</span><b>$80</b></div>
+              <div class="row"><span>JOHN-091</span><b>$40</b></div>
+            </article>
+            <article class="panel">
+              <h3>Withdrawal Requests</h3>
+              <div class="row"><span>Richmond Sevilla</span><b class="warn">Pending</b></div>
+              <div class="row"><span>Maria L.</span><b class="ok">Approved</b></div>
+              <button class="danger-btn wide" type="button">Approve Withdrawal</button>
+            </article>
+          </div>
+        </div>
+
+        <div class="portal-tab" id="admin-reports">
+          <div class="stat-grid">
+            <article><span>Sales Today</span><strong>$920</strong><small>4 approved payments</small></article>
+            <article><span>Pending Revenue</span><strong>$2,100</strong><small>Awaiting review</small></article>
+            <article><span>Renewals Due</span><strong>26</strong><small>Next 7 days</small></article>
+          </div>
+          <article class="panel">
+            <h3>Report Exports</h3>
+            <div class="row"><span>Sales summary</span><button class="secondary-btn" type="button">Export CSV</button></div>
+            <div class="row"><span>Payment queue</span><button class="secondary-btn" type="button">Export CSV</button></div>
+            <div class="row"><span>Commission ledger</span><button class="secondary-btn" type="button">Export CSV</button></div>
+          </article>
+        </div>
+      </section>
     </main>
+
+    <script src="portal.js"></script>
   </body>
 </html>
