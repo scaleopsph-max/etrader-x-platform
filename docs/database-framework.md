@@ -2,6 +2,14 @@
 
 This module defines the database foundation for the ETrader-X MVP.
 
+## Project
+
+- Supabase project: `ETrader-X Platform`
+- Project ref: `uefydotccjokisgutton`
+- API URL: `https://uefydotccjokisgutton.supabase.co`
+- Region: `ap-southeast-1`
+- Monthly project cost confirmed in Supabase: `$0`
+
 ## Tables
 
 - `profiles`: client/admin profile data tied to `auth.users`
@@ -31,3 +39,5 @@ This module defines the database foundation for the ETrader-X MVP.
 - Payment proof upload paths are stored in `payments.proof_path`; actual files should use Supabase Storage later.
 - This migration includes starter products and plans from the ETX Telegram flow.
 - Apply this only to the confirmed ETX Supabase project, not a shared production database.
+- For frontend integration, use `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
+- Never commit service-role keys or private admin credentials.
