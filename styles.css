@@ -869,6 +869,20 @@ textarea {
   gap: 8px;
 }
 
+.report-filter-panel {
+  margin-bottom: 16px;
+}
+
+.report-grid {
+  margin-top: 16px;
+}
+
+.report-row small {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
 .proof-note {
   margin: 0 0 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);

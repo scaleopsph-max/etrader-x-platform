@@ -41,6 +41,13 @@
   const adminPriorityList = document.querySelector("[data-admin-priority-list]");
   const adminHealthList = document.querySelector("[data-admin-health-list]");
   const adminRevenueList = document.querySelector("[data-admin-revenue-list]");
+  const reportRangeFilter = document.querySelector("[data-report-range]");
+  const reportStatusFilter = document.querySelector("[data-report-status]");
+  const reportMethodFilter = document.querySelector("[data-report-method]");
+  const reportSearchFilter = document.querySelector("[data-report-search]");
+  const reportDepositsList = document.querySelector("[data-report-deposits-list]");
+  const reportSubscriptionsList = document.querySelector("[data-report-subscriptions-list]");
+  const reportReferralsList = document.querySelector("[data-report-referrals-list]");
   const adminClientsList = document.querySelector("[data-admin-clients-list]");
   const adminSubscriptionsList = document.querySelector("[data-admin-subscriptions-list]");
   const adminExpiringList = document.querySelector("[data-admin-expiring-list]");
@@ -130,6 +137,7 @@
     bindAdminForms();
     bindExchangeRateForm();
     bindAdminRoleForm();
+    bindReportFilters();
     bindReportExports();
     bindSignOut();
     await refreshSession();
@@ -1369,17 +1377,31 @@
     });
   }
 
+  function bindReportFilters() {
+    [reportRangeFilter, reportStatusFilter, reportMethodFilter, reportSearchFilter].forEach((control) => {
+      if (!control) return;
+      control.addEventListener("input", () => {
+        if (adminReportSnapshot) renderAdminReports(adminReportSnapshot);
+      });
+      control.addEventListener("change", () => {
+        if (adminReportSnapshot) renderAdminReports(adminReportSnapshot);
+      });
+    });
+  }
+
   function renderAdminReports(snapshot) {
-    const pendingDeposits = snapshot.deposits.filter((deposit) => ["pending", "under_review"].includes(deposit.status));
-    const approvedPayments = snapshot.payments.filter((payment) => payment.status === "approved");
-    const paymentsToday = snapshot.payments.filter((payment) => isToday(payment.created_at));
-    const activeSubscriptions = snapshot.subscriptions.filter((subscription) => ["active", "trial"].includes(subscription.status));
+    hydrateReportMethodFilter(snapshot.paymentMethods || []);
+    const filtered = filterReportSnapshot(snapshot);
+    const pendingDeposits = filtered.deposits.filter((deposit) => ["pending", "under_review"].includes(deposit.status));
+    const approvedPayments = filtered.payments.filter((payment) => payment.status === "approved");
+    const paymentsToday = filtered.payments.filter((payment) => isToday(payment.created_at));
+    const activeSubscriptions = filtered.subscriptions.filter((subscription) => ["active", "trial"].includes(subscription.status));
     const renewalsDue = activeSubscriptions.filter((subscription) => isWithinDays(subscription.expires_at, 7));
-    const openSupport = snapshot.supportTickets.filter((ticket) => ["open", "pending_admin", "pending_client"].includes(ticket.status));
-    const pendingCommissionRequests = snapshot.commissionRequests.filter((request) => request.status === "requested");
+    const openSupport = filtered.supportTickets.filter((ticket) => ["open", "pending_admin", "pending_client"].includes(ticket.status));
+    const pendingCommissionRequests = filtered.commissionRequests.filter((request) => request.status === "requested");
     const pendingRevenue = pendingDeposits.reduce((sum, deposit) => sum + Number(deposit.amount || 0), 0);
     const approvedRevenue = approvedPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-    const commissionLiability = snapshot.referrals
+    const commissionLiability = filtered.referrals
       .filter((referral) => ["available", "requested", "approved"].includes(referral.commission_status))
       .reduce((sum, referral) => sum + Number(referral.commission_amount || 0), 0);
 
@@ -1402,8 +1424,9 @@
       [
         ["Open support tickets", String(openSupport.length), openSupport.length ? "warn" : "ok"],
         ["Commission liability", formatMoney(commissionLiability, "USD"), commissionLiability ? "warn" : "ok"],
-        ["Active products", String(snapshot.products.filter((product) => product.status === "active").length), "ok"],
-        ["Published plans", String(snapshot.plans.filter((plan) => plan.status === "active").length), "ok"],
+        ["Approved deposits", String(filtered.deposits.filter((deposit) => deposit.status === "approved").length), "ok"],
+        ["PHP deposits", formatMoney(sumDepositsByCurrency(filtered.deposits, "PHP"), "PHP"), "warn"],
+        ["USDT deposits", formatMoney(sumDepositsByCurrency(filtered.deposits, "USDT"), "USD"), "ok"],
       ],
       renderMetricRow,
       "No operations metrics yet."
@@ -1415,6 +1438,133 @@
       renderMetricRow,
       "No wallet sales yet."
     );
+
+    renderListElement(
+      reportDepositsList,
+      filtered.deposits.slice(0, 12),
+      renderReportDepositRow,
+      "No deposits match these filters."
+    );
+
+    renderListElement(
+      reportSubscriptionsList,
+      filtered.subscriptions.slice(0, 12),
+      renderReportSubscriptionRow,
+      "No subscriptions match these filters."
+    );
+
+    renderListElement(
+      reportReferralsList,
+      filtered.referrals.slice(0, 12),
+      renderReportReferralRow,
+      "No referrals match these filters."
+    );
+  }
+
+  function hydrateReportMethodFilter(methods) {
+    if (!reportMethodFilter || reportMethodFilter.dataset.hydrated === "true") return;
+    const currentValue = reportMethodFilter.value || "all";
+    reportMethodFilter.innerHTML = [
+      `<option value="all">All methods</option>`,
+      ...methods.map((method) => `<option value="${escapeHtml(method.method_key)}">${escapeHtml(method.name)}</option>`),
+    ].join("");
+    reportMethodFilter.value = currentValue;
+    reportMethodFilter.dataset.hydrated = "true";
+  }
+
+  function filterReportSnapshot(snapshot) {
+    const range = reportRangeFilter?.value || "all";
+    const status = reportStatusFilter?.value || "all";
+    const method = reportMethodFilter?.value || "all";
+    const search = String(reportSearchFilter?.value || "").trim().toLowerCase();
+
+    const dateFilter = (item) => isWithinReportRange(item.created_at || item.updated_at, range);
+    const searchFilter = (item) => !search || reportSearchText(item).includes(search);
+    const statusFilter = (item) => status === "all" || item.status === status || item.commission_status === status;
+    const methodFilter = (item) => method === "all" || item.method === method || item.payment_methods?.method_key === method;
+
+    return {
+      ...snapshot,
+      deposits: snapshot.deposits.filter((item) => dateFilter(item) && statusFilter(item) && methodFilter(item) && searchFilter(item)),
+      payments: snapshot.payments.filter((item) => dateFilter(item) && statusFilter(item) && methodFilter(item) && searchFilter(item)),
+      orders: snapshot.orders.filter((item) => dateFilter(item) && statusFilter(item) && searchFilter(item)),
+      subscriptions: snapshot.subscriptions.filter((item) => dateFilter(item) && statusFilter(item) && searchFilter(item)),
+      referrals: snapshot.referrals.filter((item) => dateFilter(item) && statusFilter(item) && searchFilter(item)),
+      commissionRequests: snapshot.commissionRequests.filter((item) => dateFilter(item) && statusFilter(item) && searchFilter(item)),
+      supportTickets: snapshot.supportTickets.filter((item) => dateFilter(item) && statusFilter(item) && searchFilter(item)),
+    };
+  }
+
+  function isWithinReportRange(value, range) {
+    if (range === "all") return true;
+    if (!value) return false;
+    if (range === "today") return isToday(value);
+    const days = Number(range || 0);
+    if (!days) return true;
+    const date = new Date(value);
+    return Date.now() - date.getTime() <= days * 86400000;
+  }
+
+  function reportSearchText(item) {
+    return [
+      item.transaction_reference,
+      item.method,
+      item.status,
+      item.commission_status,
+      item.payment_methods?.name,
+      item.profiles?.email,
+      item.profiles?.full_name,
+      item.profiles?.telegram_username,
+      item.referrer?.email,
+      item.referrer?.full_name,
+      item.referrer?.referral_code,
+      item.referred?.email,
+      item.referred?.full_name,
+      item.plans?.name,
+      item.plans?.products?.name,
+      item.products?.name,
+    ].filter(Boolean).join(" ").toLowerCase();
+  }
+
+  function sumDepositsByCurrency(deposits, currency) {
+    return deposits
+      .filter((deposit) => (deposit.paid_currency || deposit.currency || "USD") === currency)
+      .reduce((sum, deposit) => sum + Number(deposit.paid_amount || deposit.amount || 0), 0);
+  }
+
+  function getFilteredReportSnapshot() {
+    return adminReportSnapshot ? filterReportSnapshot(adminReportSnapshot) : null;
+  }
+
+  function renderReportDepositRow(deposit) {
+    const paidCurrency = deposit.paid_currency || deposit.currency || "USD";
+    const paidAmount = Number(deposit.paid_amount || deposit.amount || 0);
+    const walletCredit = Number(deposit.wallet_credit_amount || deposit.amount || 0);
+    const rate = deposit.platform_rate ? `Rate ${formatRate(deposit.platform_rate)}` : "No rate";
+    return `
+      <div class="row report-row">
+        <span>${escapeHtml(deposit.profiles?.email || deposit.profiles?.full_name || "Client")} <small>${escapeHtml(formatMoney(paidAmount, paidCurrency))} paid / ${escapeHtml(rate)} / ${escapeHtml(deposit.transaction_reference || "No reference")}</small></span>
+        <b class="${statusClass(deposit.status)}">${escapeHtml(formatMoney(walletCredit, "USD"))}</b>
+      </div>
+    `;
+  }
+
+  function renderReportSubscriptionRow(subscription) {
+    return `
+      <div class="row report-row">
+        <span>${escapeHtml(subscription.products?.name || "ETX Product")} <small>${escapeHtml(subscription.profiles?.email || "Client")} / expires ${escapeHtml(formatDate(subscription.expires_at))}</small></span>
+        <b class="${statusClass(subscription.status)}">${escapeHtml(formatStatus(subscription.status))}</b>
+      </div>
+    `;
+  }
+
+  function renderReportReferralRow(referral) {
+    return `
+      <div class="row report-row">
+        <span>${escapeHtml(referral.referrer?.email || referral.referrer?.full_name || "Referrer")} <small>referred ${escapeHtml(referral.referred?.email || referral.referred?.full_name || "Client")}</small></span>
+        <b class="${statusClass(referral.commission_status)}">${escapeHtml(formatMoney(Number(referral.commission_amount || 0), "USD"))}</b>
+      </div>
+    `;
   }
 
   function bindReportExports() {
@@ -1427,7 +1577,7 @@
         }
 
         const type = button.dataset.reportExport;
-        const rows = buildExportRows(type, adminReportSnapshot);
+        const rows = buildExportRows(type, getFilteredReportSnapshot() || adminReportSnapshot);
         downloadCsv(`etx-${type}-report.csv`, rows);
         setStatus(`${type} report exported.`, "ok");
       });
@@ -1473,6 +1623,20 @@
           referral.commission_amount || 0,
           referral.commission_status || "",
           referral.created_at || "",
+        ]),
+      ];
+    }
+
+    if (type === "subscriptions") {
+      return [
+        ["Client", "Product", "Plan", "Status", "Expires At", "Created At"],
+        ...snapshot.subscriptions.map((subscription) => [
+          subscription.profiles?.email || subscription.profiles?.full_name || "",
+          subscription.products?.name || "",
+          subscription.plans?.name || "",
+          subscription.status || "",
+          subscription.expires_at || "",
+          subscription.created_at || "",
         ]),
       ];
     }

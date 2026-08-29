@@ -355,6 +355,15 @@
             <h2>Operations reports</h2>
             <p>Export sales, deposit queue, and commission data for review.</p>
           </div>
+          <article class="panel report-filter-panel">
+            <h3>Report Filters</h3>
+            <div class="form-grid">
+              <label>Date Range<select data-report-range><option value="all">All time</option><option value="today">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></label>
+              <label>Status<select data-report-status><option value="all">All statuses</option><option value="under_review">Under review</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="active">Active</option></select></label>
+              <label>Method<select data-report-method><option value="all">All methods</option></select></label>
+              <label>Search<input type="search" data-report-search placeholder="Client, product, reference, code" /></label>
+            </div>
+          </article>
           <div class="stat-grid">
             <article><span>Wallet Sales Today</span><strong data-report-payments-today>0</strong><small>Purchased today</small></article>
             <article><span>Pending Deposits</span><strong data-report-pending-revenue>$0.00</strong><small>Awaiting review</small></article>
@@ -374,10 +383,31 @@
               </div>
             </article>
           </div>
+          <div class="content-grid report-grid">
+            <article class="panel">
+              <h3>Deposit Report</h3>
+              <div data-report-deposits-list>
+                <p class="codebox">Deposit report loads after sign in.</p>
+              </div>
+            </article>
+            <article class="panel">
+              <h3>Subscription Report</h3>
+              <div data-report-subscriptions-list>
+                <p class="codebox">Subscription report loads after sign in.</p>
+              </div>
+            </article>
+            <article class="panel">
+              <h3>Referral Report</h3>
+              <div data-report-referrals-list>
+                <p class="codebox">Referral report loads after sign in.</p>
+              </div>
+            </article>
+          </div>
           <article class="panel">
             <h3>Report Exports</h3>
             <div class="row"><span>Sales summary</span><button class="secondary-btn" type="button" data-report-export="sales">Export CSV</button></div>
             <div class="row"><span>Deposit queue</span><button class="secondary-btn" type="button" data-report-export="payments">Export CSV</button></div>
+            <div class="row"><span>Subscriptions</span><button class="secondary-btn" type="button" data-report-export="subscriptions">Export CSV</button></div>
             <div class="row"><span>Commission ledger</span><button class="secondary-btn" type="button" data-report-export="commissions">Export CSV</button></div>
           </article>
         </div>
