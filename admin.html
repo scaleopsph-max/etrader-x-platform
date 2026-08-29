@@ -117,7 +117,10 @@
               <button class="secondary-btn wide" type="button" data-jump="admin-reports">View Reports</button>
             </article>
             <article class="panel">
-              <h3>Notification Center</h3>
+              <div class="panel-title-row">
+                <h3>Notification Center</h3>
+                <span class="nav-badge hidden" data-admin-notification-badge>0</span>
+              </div>
               <div data-admin-notifications-list>
                 <p class="codebox">Notifications load after sign in.</p>
               </div>
@@ -227,6 +230,7 @@
           </div>
           <article class="panel">
             <h3>Payment Approval Queue</h3>
+            <label class="review-note-control">Review Notes<textarea id="admin-review-notes" placeholder="Optional note for approval or rejection. This will be included in the client notification."></textarea></label>
             <div data-admin-payment-queue>
               <p class="codebox">Sign in as admin to load payment queue.</p>
             </div>

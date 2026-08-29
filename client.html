@@ -75,7 +75,7 @@
         <button data-tab="payments">Payments</button>
         <button data-tab="subscriptions">Subscriptions</button>
         <button data-tab="referrals">Referral</button>
-        <button data-tab="support">Support</button>
+        <button data-tab="support">Support <span class="nav-badge hidden" data-notification-badge>0</span></button>
         <div class="sidebar-account">
           <small>Signed in as</small>
           <strong data-auth-email>Not signed in</strong>
@@ -119,7 +119,10 @@
             </article>
           </div>
           <article class="panel order-panel">
-            <h3>Notifications</h3>
+            <div class="panel-title-row">
+              <h3>Notifications</h3>
+              <button class="secondary-btn compact-btn" type="button" data-mark-notifications-read>Mark all read</button>
+            </div>
             <div data-client-notifications>
               <p class="codebox">No notifications yet.</p>
             </div>
@@ -197,9 +200,10 @@
                 </label>
                 <label>
                   Upload Proof
-                  <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" />
+                  <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" data-proof-input />
                 </label>
               </div>
+              <p class="proof-note" data-proof-note>Accepted: JPG, PNG, WEBP, or PDF up to 8 MB.</p>
               <button class="primary-btn" type="submit">Submit For Admin Review</button>
             </form>
           </article>
@@ -295,6 +299,9 @@
             <h3>My Tickets</h3>
             <div data-support-tickets-list>
               <p class="codebox">No support tickets yet.</p>
+            </div>
+            <div data-support-thread>
+              <p class="codebox">Select a ticket to view replies.</p>
             </div>
           </article>
         </div>
