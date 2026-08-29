@@ -15,6 +15,8 @@
   const paymentForm = document.querySelector("[data-payment-form]");
   const paymentMethodSelect = document.querySelector("[data-payment-method-select]");
   const paymentMethodDetails = document.querySelector("[data-payment-method-details]");
+  const depositAmountInput = document.querySelector("[data-deposit-amount-input]");
+  const depositRatePreview = document.querySelector("[data-deposit-rate-preview]");
   const proofInput = document.querySelector("[data-proof-input]");
   const proofNote = document.querySelector("[data-proof-note]");
   const adminGate = document.querySelector("[data-admin-gate]");
@@ -23,6 +25,9 @@
   const adminProductForm = document.querySelector("[data-admin-product-form]");
   const adminPlanForm = document.querySelector("[data-admin-plan-form]");
   const adminPaymentMethodForm = document.querySelector("[data-admin-payment-method-form]");
+  const adminExchangeRateForm = document.querySelector("[data-admin-exchange-rate-form]");
+  const fetchLiveRateButton = document.querySelector("[data-fetch-live-rate]");
+  const adminExchangeRateSummary = document.querySelector("[data-admin-exchange-rate-summary]");
   const adminRoleForm = document.querySelector("[data-admin-role-form]");
   const adminProductsList = document.querySelector("[data-admin-products-list]");
   const adminPlansList = document.querySelector("[data-admin-plans-list]");
@@ -65,6 +70,19 @@
   const aiChatMessages = document.querySelector("[data-ai-chat-messages]");
   const MAX_PROOF_SIZE = 8 * 1024 * 1024;
   const ALLOWED_PROOF_TYPES = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
+  const LIVE_RATE_URL = "https://open.er-api.com/v6/latest/USD";
+  const DEFAULT_PHP_RATE = {
+    quote_currency: "PHP",
+    base_currency: "USD",
+    live_rate: 56.5,
+    markup_amount: 0.5,
+    manual_rate: null,
+    final_rate: 57,
+    source: "fallback",
+    auto_enabled: true,
+    fetched_at: null,
+    updated_at: null,
+  };
 
   if (!sdk || !config.url || !config.publishableKey) {
     setStatus("Supabase config is missing. Add the project URL and publishable key first.", "warn");
@@ -83,6 +101,7 @@
   let currentProfile = null;
   let currentPlan = null;
   let paymentMethodsCache = [];
+  let exchangeRateCache = { ...DEFAULT_PHP_RATE };
   let availableCommission = 0;
   let walletBalance = 0;
   let adminReportSnapshot = null;
@@ -103,11 +122,13 @@
     bindWalletPurchase();
     bindProofInput();
     bindPaymentMethodSelect();
+    bindDepositEstimate();
     bindNotificationActions();
     bindCommissionForm();
     bindSupportForm();
     bindAiSupportChat();
     bindAdminForms();
+    bindExchangeRateForm();
     bindAdminRoleForm();
     bindReportExports();
     bindSignOut();
@@ -132,6 +153,7 @@
     currentUser = data.user;
     currentProfile = await ensureProfile(data.user);
     renderSignedIn();
+    await loadExchangeRate();
     await loadPaymentMethods();
     await hydrateClientData();
     renderAdminGate(data.user);
@@ -279,13 +301,24 @@
         setStatus("Deposit amount must be greater than zero.", "warn");
         return;
       }
+      const estimate = calculateWalletCredit(amount, selectedMethod);
+      if (!estimate.walletCredit || estimate.walletCredit <= 0) {
+        setStatus("Unable to calculate wallet credit. Check payment method and amount.", "warn");
+        return;
+      }
 
       const { data: deposit, error: depositError } = await client.from("deposit_requests").insert({
         client_id: currentUser.id,
         method: selectedMethod.method_key,
         payment_method_id: selectedMethod.id,
-        amount,
+        amount: estimate.walletCredit,
         currency: "USD",
+        paid_amount: estimate.paidAmount,
+        paid_currency: estimate.paidCurrency,
+        exchange_rate: estimate.exchangeRate,
+        exchange_markup: estimate.exchangeMarkup,
+        platform_rate: estimate.platformRate,
+        wallet_credit_amount: estimate.walletCredit,
         transaction_reference: String(form.get("transaction_reference") || "").trim(),
         proof_path: proofPath,
         proof_file_name: file.name,
@@ -301,7 +334,7 @@
       await createNotification({
         recipientId: currentUser.id,
         title: "Deposit submitted",
-        message: `${selectedMethod.name} top-up proof received. Please wait for admin verification.`,
+        message: `${selectedMethod.name} top-up proof received. Estimated wallet credit is ${formatMoney(estimate.walletCredit, "USD")}. Please wait for admin verification.`,
         category: "payment",
         entityTable: "deposit_requests",
         entityId: deposit.id,
@@ -506,7 +539,7 @@
     const text = question.toLowerCase();
 
     if (text.includes("deposit") || text.includes("top up") || text.includes("payment") || text.includes("bayad") || text.includes("proof") || text.includes("gcash") || text.includes("bpi") || text.includes("usdt")) {
-      return "For deposits: open Wallet / Deposit, select the active method, enter the reference or TX hash, amount, and upload proof. Admin verifies it before your wallet balance is credited.";
+      return "For deposits: open Wallet / Deposit, select a method, enter paid amount and reference, then upload proof. GCash/BPI PHP deposits are converted to USD using the platform rate. USDT is credited 1:1 after admin approval.";
     }
 
     if (text.includes("subscribe") || text.includes("subscription") || text.includes("plan") || text.includes("buy")) {
@@ -635,6 +668,78 @@
     }
   }
 
+  function bindExchangeRateForm() {
+    if (fetchLiveRateButton) {
+      fetchLiveRateButton.addEventListener("click", async () => {
+        if (!requireAdminWrite()) return;
+
+        fetchLiveRateButton.disabled = true;
+        setStatus("Fetching live USD/PHP rate...");
+        try {
+          const live = await fetchLivePhpRate();
+          exchangeRateCache = normalizeExchangeRate({
+            ...exchangeRateCache,
+            live_rate: live.rate,
+            source: live.source,
+            fetched_at: live.fetchedAt,
+          });
+          hydrateExchangeRateForm();
+          renderExchangeRateSummary();
+          renderDepositEstimate();
+          setStatus("Live USD/PHP rate loaded. Review markup, then save.", "ok");
+        } catch (error) {
+          setStatus(error.message, "warn");
+        } finally {
+          fetchLiveRateButton.disabled = false;
+        }
+      });
+    }
+
+    if (!adminExchangeRateForm) return;
+
+    adminExchangeRateForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!requireAdminWrite()) return;
+
+      const form = new FormData(adminExchangeRateForm);
+      const liveRate = Number(form.get("live_rate") || 0);
+      const markup = Number(form.get("markup_amount") || 0);
+      const manualValue = String(form.get("manual_rate") || "").trim();
+      const manualRate = manualValue ? Number(manualValue) : null;
+
+      if (!liveRate || liveRate <= 0 || markup < 0 || (manualRate !== null && manualRate <= 0)) {
+        setStatus("Enter a valid live rate, markup, and optional manual override.", "warn");
+        return;
+      }
+
+      const payload = {
+        quote_currency: "PHP",
+        base_currency: "USD",
+        live_rate: liveRate,
+        markup_amount: markup,
+        manual_rate: manualRate,
+        source: exchangeRateCache.source || "admin",
+        auto_enabled: String(form.get("auto_enabled")) === "true",
+        fetched_at: exchangeRateCache.fetched_at,
+        updated_by: currentUser.id,
+      };
+
+      const { data, error } = await client.from("exchange_rates").upsert(payload, { onConflict: "quote_currency" }).select("*").single();
+      if (error) {
+        setStatus(error.message, "warn");
+        return;
+      }
+
+      exchangeRateCache = normalizeExchangeRate(data);
+      hydrateExchangeRateForm();
+      renderExchangeRateSummary();
+      renderDepositEstimate();
+      await logAdminAction("exchange_rate.updated", "exchange_rates", null);
+      setStatus("Conversion rate saved.", "ok");
+      await loadAdminData();
+    });
+  }
+
   function bindAdminRoleForm() {
     if (!adminRoleForm) return;
 
@@ -739,6 +844,138 @@
     });
   }
 
+  async function loadExchangeRate() {
+    if (!currentUser) return exchangeRateCache;
+
+    const { data, error } = await client.from("exchange_rates").select("*").eq("quote_currency", "PHP").maybeSingle();
+    if (!error && data) {
+      exchangeRateCache = normalizeExchangeRate(data);
+    }
+
+    hydrateExchangeRateForm();
+    renderExchangeRateSummary();
+    renderDepositEstimate();
+    return exchangeRateCache;
+  }
+
+  function normalizeExchangeRate(rate) {
+    const liveRate = Number(rate?.live_rate || DEFAULT_PHP_RATE.live_rate);
+    const markup = Number(rate?.markup_amount ?? DEFAULT_PHP_RATE.markup_amount);
+    const manualRate = rate?.manual_rate === null || rate?.manual_rate === undefined || rate?.manual_rate === "" ? null : Number(rate.manual_rate);
+    const finalRate = Number(rate?.final_rate || manualRate || liveRate + markup);
+    return {
+      ...DEFAULT_PHP_RATE,
+      ...rate,
+      live_rate: liveRate,
+      markup_amount: markup,
+      manual_rate: manualRate,
+      final_rate: finalRate,
+      auto_enabled: rate?.auto_enabled !== false,
+    };
+  }
+
+  function getPlatformRate() {
+    return Number(exchangeRateCache.final_rate || exchangeRateCache.manual_rate || Number(exchangeRateCache.live_rate || 0) + Number(exchangeRateCache.markup_amount || 0) || DEFAULT_PHP_RATE.final_rate);
+  }
+
+  async function fetchLivePhpRate() {
+    const response = await fetch(LIVE_RATE_URL, { cache: "no-store" });
+    if (!response.ok) throw new Error("Live rate source is unavailable.");
+    const payload = await response.json();
+    const rate = Number(payload?.rates?.PHP);
+    if (!rate || rate <= 0) throw new Error("Live PHP rate was not returned.");
+    return {
+      rate,
+      source: payload?.provider || "open.er-api.com",
+      fetchedAt: new Date().toISOString(),
+    };
+  }
+
+  function getDepositCurrency(method) {
+    if (!method) return "USD";
+    if (method.method_key === "gcash" || method.method_key === "bpi" || method.type === "ewallet" || method.type === "bank") return "PHP";
+    if (method.method_key?.startsWith("usdt") || method.type === "crypto") return "USDT";
+    return "USD";
+  }
+
+  function calculateWalletCredit(amount, method) {
+    const paidAmount = Number(amount || 0);
+    const paidCurrency = getDepositCurrency(method);
+    if (!paidAmount || paidAmount <= 0) {
+      return { paidAmount: 0, paidCurrency, walletCredit: 0, exchangeRate: null, exchangeMarkup: 0, platformRate: null };
+    }
+
+    if (paidCurrency === "PHP") {
+      const platformRate = getPlatformRate();
+      return {
+        paidAmount,
+        paidCurrency,
+        walletCredit: roundMoney(paidAmount / platformRate),
+        exchangeRate: Number(exchangeRateCache.live_rate || 0),
+        exchangeMarkup: Number(exchangeRateCache.markup_amount || 0),
+        platformRate,
+      };
+    }
+
+    return {
+      paidAmount,
+      paidCurrency,
+      walletCredit: roundMoney(paidAmount),
+      exchangeRate: 1,
+      exchangeMarkup: 0,
+      platformRate: 1,
+    };
+  }
+
+  function renderDepositEstimate() {
+    if (!depositRatePreview || !paymentMethodSelect) return;
+
+    const method = paymentMethodsCache.find((item) => item.method_key === paymentMethodSelect.value && item.status === "active");
+    const amount = Number(depositAmountInput?.value || 0);
+    const estimate = calculateWalletCredit(amount, method);
+
+    if (!method) {
+      depositRatePreview.innerHTML = `<strong>Wallet Credit Estimate</strong><span>Select a payment method and enter amount.</span>`;
+      return;
+    }
+
+    if (!amount || amount <= 0) {
+      depositRatePreview.innerHTML = `<strong>${escapeHtml(estimate.paidCurrency)} Deposit</strong><span>Enter amount to estimate USD wallet credit.</span>`;
+      return;
+    }
+
+    const rateLine = estimate.paidCurrency === "PHP"
+      ? `<span>Rate: ${formatRate(estimate.exchangeRate)} + ${formatRate(estimate.exchangeMarkup)} = ${formatRate(estimate.platformRate)} PHP per USD</span>`
+      : `<span>Rate: 1 ${escapeHtml(estimate.paidCurrency)} = 1 USD</span>`;
+
+    depositRatePreview.innerHTML = `
+      <strong>Estimated Credit: ${escapeHtml(formatMoney(estimate.walletCredit, "USD"))}</strong>
+      <span>Paid: ${escapeHtml(formatMoney(estimate.paidAmount, estimate.paidCurrency))}</span>
+      ${rateLine}
+      <small>Final credit is subject to admin verification.</small>
+    `;
+  }
+
+  function hydrateExchangeRateForm() {
+    if (!adminExchangeRateForm) return;
+    setField(adminExchangeRateForm, "live_rate", exchangeRateCache.live_rate || "");
+    setField(adminExchangeRateForm, "markup_amount", exchangeRateCache.markup_amount ?? 0);
+    setField(adminExchangeRateForm, "manual_rate", exchangeRateCache.manual_rate || "");
+    setField(adminExchangeRateForm, "auto_enabled", String(exchangeRateCache.auto_enabled !== false));
+  }
+
+  function renderExchangeRateSummary() {
+    if (!adminExchangeRateSummary) return;
+    const updated = exchangeRateCache.updated_at || exchangeRateCache.fetched_at;
+    adminExchangeRateSummary.innerHTML = `
+      <div class="row"><span>Live USD/PHP</span><b>${escapeHtml(formatRate(exchangeRateCache.live_rate))}</b></div>
+      <div class="row"><span>Markup</span><b>${escapeHtml(formatRate(exchangeRateCache.markup_amount))}</b></div>
+      <div class="row"><span>Platform Rate</span><b class="ok">${escapeHtml(formatRate(getPlatformRate()))}</b></div>
+      <div class="row"><span>Mode</span><b>${escapeHtml(exchangeRateCache.manual_rate ? "Manual override" : "Auto + markup")}</b></div>
+      <div class="row"><span>Updated</span><b>${escapeHtml(updated ? formatDateTime(updated) : "Not synced")}</b></div>
+    `;
+  }
+
   async function loadPaymentMethods() {
     if (!paymentMethodSelect && !adminPaymentMethodsList) return;
 
@@ -765,7 +1002,15 @@
 
   function bindPaymentMethodSelect() {
     if (!paymentMethodSelect) return;
-    paymentMethodSelect.addEventListener("change", renderPaymentMethodDetails);
+    paymentMethodSelect.addEventListener("change", () => {
+      renderPaymentMethodDetails();
+      renderDepositEstimate();
+    });
+  }
+
+  function bindDepositEstimate() {
+    if (!depositAmountInput) return;
+    depositAmountInput.addEventListener("input", renderDepositEstimate);
   }
 
   function renderPaymentMethodOptions() {
@@ -778,6 +1023,7 @@
       : `<option value="">No active payment methods</option>`;
 
     renderPaymentMethodDetails();
+    renderDepositEstimate();
   }
 
   function renderPaymentMethodDetails() {
@@ -791,6 +1037,8 @@
 
     const account = method.account_number ? method.account_number : "Admin will provide the final account details.";
     const meta = [method.account_name, method.network].filter(Boolean).join(" / ");
+    const paidCurrency = getDepositCurrency(method);
+    const currencyNote = paidCurrency === "PHP" ? `Enter PHP amount. Platform rate: ${formatRate(getPlatformRate())} PHP per USD.` : "Enter USDT amount. Wallet credit is 1:1 USD.";
     const qr = method.qr_image_url
       ? `<a href="${escapeHtml(method.qr_image_url)}" target="_blank" rel="noopener">Open QR / payment image</a>`
       : "";
@@ -799,6 +1047,7 @@
       <strong>${escapeHtml(method.name)}</strong>
       <span>${escapeHtml(meta || method.type)}</span>
       <span>${escapeHtml(account)}</span>
+      <span>${escapeHtml(currencyNote)}</span>
       <small>${escapeHtml(method.instructions || "Send exact top-up amount, then upload proof for verification.")}</small>
       ${qr}
     `;
@@ -816,7 +1065,7 @@
       client.from("commission_requests").select("amount,status,payout_method,created_at").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("support_tickets").select("id,subject,message,status,created_at,updated_at,support_replies(id,author_id,message,is_admin_reply,created_at)").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("notifications").select("*").eq("recipient_id", currentUser.id).neq("status", "archived").order("created_at", { ascending: false }).limit(8),
-      client.from("deposit_requests").select("id,status,amount,currency,method,transaction_reference,proof_file_name,review_notes,created_at").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(8),
+      client.from("deposit_requests").select("id,status,amount,currency,paid_amount,paid_currency,exchange_rate,exchange_markup,platform_rate,wallet_credit_amount,method,transaction_reference,proof_file_name,review_notes,created_at").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(8),
       client.from("wallet_transactions").select("id,type,direction,amount,currency,balance_after,description,created_at").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(8),
     ]);
 
@@ -969,7 +1218,7 @@
 
     const roleRequest = hasSuperUserAccess() ? client.from("admin_roles").select("*").order("sort_order", { ascending: true }) : Promise.resolve({ data: [], error: null });
 
-    const [products, plans, paymentMethods, payments, deposits, walletTransactions, referrals, commissionRequests, supportTickets, subscriptions, orders, profiles, notifications, roles] = await Promise.all([
+    const [products, plans, paymentMethods, payments, deposits, walletTransactions, referrals, commissionRequests, supportTickets, subscriptions, orders, profiles, notifications, roles, exchangeRates] = await Promise.all([
       client.from("products").select("*").order("sort_order", { ascending: true }),
       client.from("plans").select("*,products(name,code)").order("created_at", { ascending: false }),
       client.from("payment_methods").select("*").order("sort_order", { ascending: true }),
@@ -1025,11 +1274,18 @@
         .order("created_at", { ascending: false })
         .limit(20),
       roleRequest,
+      client.from("exchange_rates").select("*").eq("quote_currency", "PHP").maybeSingle(),
     ]);
 
-    if (products.error || plans.error || paymentMethods.error || payments.error || deposits.error || walletTransactions.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error || profiles.error || notifications.error || roles.error) {
-      setStatus(products.error?.message || plans.error?.message || paymentMethods.error?.message || payments.error?.message || deposits.error?.message || walletTransactions.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message || profiles.error?.message || notifications.error?.message || roles.error?.message, "warn");
+    if (products.error || plans.error || paymentMethods.error || payments.error || deposits.error || walletTransactions.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error || profiles.error || notifications.error || roles.error || exchangeRates.error) {
+      setStatus(products.error?.message || plans.error?.message || paymentMethods.error?.message || payments.error?.message || deposits.error?.message || walletTransactions.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message || profiles.error?.message || notifications.error?.message || roles.error?.message || exchangeRates.error?.message, "warn");
       return;
+    }
+
+    if (exchangeRates.data) {
+      exchangeRateCache = normalizeExchangeRate(exchangeRates.data);
+      hydrateExchangeRateForm();
+      renderExchangeRateSummary();
     }
 
     renderListElement(adminProductsList, products.data, renderAdminProductRow, "No products yet.");
@@ -1065,6 +1321,7 @@
       profiles: profiles.data || [],
       notifications: notifications.data || [],
       roles: roles.data || [],
+      exchangeRates: exchangeRates.data ? [exchangeRates.data] : [],
     };
     renderAdminReports(adminReportSnapshot);
     paymentMethodsCache = paymentMethods.data || [];
@@ -1190,11 +1447,15 @@
   function buildExportRows(type, snapshot) {
     if (type === "payments") {
       return [
-        ["Client", "Amount", "Currency", "Status", "Method", "Reference", "Created At"],
+        ["Client", "Paid Amount", "Paid Currency", "Exchange Rate", "Markup", "Platform Rate", "USD Credit", "Status", "Method", "Reference", "Created At"],
         ...snapshot.deposits.map((deposit) => [
           deposit.profiles?.email || deposit.profiles?.full_name || "",
-          deposit.amount || 0,
-          deposit.currency || "USD",
+          deposit.paid_amount || deposit.amount || 0,
+          deposit.paid_currency || deposit.currency || "USD",
+          deposit.exchange_rate || "",
+          deposit.exchange_markup || "",
+          deposit.platform_rate || "",
+          deposit.wallet_credit_amount || deposit.amount || 0,
           deposit.status || "",
           deposit.payment_methods?.name || deposit.method || "",
           deposit.transaction_reference || "",
@@ -1479,7 +1740,7 @@
     const reviewNotes = getAdminReviewNotes();
     const { data: deposit, error: readError } = await client
       .from("deposit_requests")
-      .select("id,client_id,status")
+      .select("id,client_id,status,wallet_credit_amount,amount")
       .eq("id", depositId)
       .single();
 
@@ -1493,9 +1754,17 @@
       return;
     }
 
+    const creditInput = document.querySelector(`[data-admin-credit-amount][data-deposit-id="${CSS.escape(depositId)}"]`);
+    const approvedCredit = Number(creditInput?.value || deposit.wallet_credit_amount || deposit.amount || 0);
+    if (!approvedCredit || approvedCredit <= 0) {
+      setStatus("Approved wallet credit must be greater than zero.", "warn");
+      return;
+    }
+
     const { error } = await client.rpc("approve_wallet_deposit", {
       target_deposit_id: deposit.id,
       review_note: reviewNotes || null,
+      approved_wallet_credit: approvedCredit,
     });
 
     if (error) {
@@ -1508,8 +1777,8 @@
       recipientId: deposit.client_id,
       title: "Deposit approved",
       message: reviewNotes
-        ? `Your wallet has been credited. Admin note: ${reviewNotes}`
-        : "Your wallet has been credited. You can now buy ETX products using your wallet balance.",
+        ? `Your wallet has been credited ${formatMoney(approvedCredit, "USD")}. Admin note: ${reviewNotes}`
+        : `Your wallet has been credited ${formatMoney(approvedCredit, "USD")}. You can now buy ETX products using your wallet balance.`,
       category: "payment",
       entityTable: "deposit_requests",
       entityId: deposit.id,
@@ -1750,9 +2019,14 @@
 
   function renderDepositRequestRow(deposit) {
     const note = deposit.review_notes ? `<small>Admin note: ${escapeHtml(deposit.review_notes)}</small>` : "";
+    const paidCurrency = deposit.paid_currency || deposit.currency || "USD";
+    const paidAmount = Number(deposit.paid_amount || deposit.amount || 0);
+    const walletCredit = Number(deposit.wallet_credit_amount || deposit.amount || 0);
+    const rate = deposit.platform_rate ? ` <small>Rate: ${escapeHtml(formatRate(deposit.platform_rate))}</small>` : "";
     return `
       <div class="row">
-        <span>${escapeHtml(formatMoney(Number(deposit.amount), deposit.currency))} / ${escapeHtml(formatStatus(deposit.method))} / ${escapeHtml(deposit.transaction_reference)} ${note}</span>
+        <span>${escapeHtml(formatMoney(paidAmount, paidCurrency))} / ${escapeHtml(formatStatus(deposit.method))} / ${escapeHtml(deposit.transaction_reference || "No reference")}${rate}${note}</span>
+        <small>USD credit ${escapeHtml(formatMoney(walletCredit, "USD"))}</small>
         <b class="${statusClass(deposit.status)}">${escapeHtml(formatStatus(deposit.status))}</b>
       </div>
     `;
@@ -2049,12 +2323,19 @@
     const methodName = deposit.payment_methods?.name || formatStatus(deposit.method || "deposit");
     const proofMeta = [deposit.proof_file_name, formatFileSize(deposit.proof_file_size), deposit.proof_file_type].filter(Boolean).join(" / ");
     const reviewNote = deposit.review_notes ? `<p>Review note: ${escapeHtml(deposit.review_notes)}</p>` : "";
+    const paidCurrency = deposit.paid_currency || deposit.currency || "USD";
+    const paidAmount = Number(deposit.paid_amount || deposit.amount || 0);
+    const walletCredit = Number(deposit.wallet_credit_amount || deposit.amount || 0);
+    const conversionMeta = paidCurrency === "PHP"
+      ? `<p>Rate: ${escapeHtml(formatRate(deposit.exchange_rate))} + ${escapeHtml(formatRate(deposit.exchange_markup))} = ${escapeHtml(formatRate(deposit.platform_rate))} PHP/USD</p>`
+      : `<p>Rate: 1 ${escapeHtml(paidCurrency)} = 1 USD</p>`;
     const proofButton = deposit.proof_path
       ? `<button class="secondary-btn" type="button" data-proof-path="${escapeHtml(deposit.proof_path)}" data-deposit-id="${escapeHtml(deposit.id)}">View Proof</button>`
       : `<span class="warn">No file</span>`;
     const canReview = deposit.status === "under_review" && hasAdminWriteAccess();
     const reviewButtons = canReview
       ? `
+        <label class="compact-field">USD Credit<input type="number" min="0.01" step="0.01" value="${escapeHtml(walletCredit)}" data-admin-credit-amount data-deposit-id="${escapeHtml(deposit.id)}" /></label>
         <button class="primary-btn" type="button" data-admin-approve data-deposit-id="${escapeHtml(deposit.id)}">Approve</button>
         <button class="secondary-btn" type="button" data-admin-reject data-deposit-id="${escapeHtml(deposit.id)}">Reject</button>
       `
@@ -2064,7 +2345,9 @@
       <div class="approval-card" data-deposit-card="${escapeHtml(deposit.id)}">
         <div>
           <strong>${escapeHtml(clientName)}</strong>
-          <p>${escapeHtml(formatMoney(Number(deposit.amount), deposit.currency))} wallet top-up</p>
+          <p>Paid: ${escapeHtml(formatMoney(paidAmount, paidCurrency))}</p>
+          <p>Wallet credit: ${escapeHtml(formatMoney(walletCredit, "USD"))}</p>
+          ${conversionMeta}
           <p>Method: ${escapeHtml(methodName)}</p>
           <p>Ref: ${escapeHtml(deposit.transaction_reference || "No reference")}</p>
           <p>Proof: ${escapeHtml(proofMeta || "No metadata")}</p>
@@ -2221,6 +2504,15 @@
   function formatMoney(amount, currency) {
     if (Number(amount) === 0) return "Free";
     return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
+  }
+
+  function roundMoney(amount) {
+    return Math.round((Number(amount || 0) + Number.EPSILON) * 100) / 100;
+  }
+
+  function formatRate(rate) {
+    const value = Number(rate || 0);
+    return value ? value.toFixed(4) : "0.0000";
   }
 
   function formatFileSize(size) {

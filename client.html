@@ -200,8 +200,12 @@
                 </label>
                 <label>
                   Amount
-                  <input type="number" name="amount" min="0" step="0.01" placeholder="300" required />
+                  <input type="number" name="amount" min="0" step="0.01" placeholder="300" data-deposit-amount-input required />
                 </label>
+                <div class="method-details rate-preview" data-deposit-rate-preview>
+                  <strong>Wallet Credit Estimate</strong>
+                  <span>Select a payment method and enter amount.</span>
+                </div>
                 <label>
                   Upload Deposit Proof
                   <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" data-proof-input />

@@ -767,6 +767,10 @@ textarea {
   color: var(--text);
 }
 
+.rate-preview {
+  min-height: 118px;
+}
+
 .method-details a,
 .method-details small {
   color: var(--cyan);
@@ -1052,6 +1056,23 @@ textarea {
 .approval-card p {
   margin-bottom: 0;
   color: var(--muted);
+}
+
+.compact-field {
+  min-width: 128px;
+}
+
+.compact-field input {
+  margin-top: 6px;
+  min-height: 42px;
+  width: 128px;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
 }
 
 .checkbox-line {

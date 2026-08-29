@@ -72,6 +72,7 @@
         <button data-tab="admin-products" data-admin-write-only>Products</button>
         <button data-tab="admin-plans" data-admin-write-only>Plans & Pricing</button>
         <button data-tab="admin-methods">Payment Methods</button>
+        <button data-tab="admin-rates">Rates</button>
         <button data-tab="admin-payments">Deposit Queue</button>
         <button data-tab="admin-clients">Clients</button>
         <button data-tab="admin-subscriptions">Subscriptions</button>
@@ -113,6 +114,7 @@
               <h3>Quick Actions</h3>
               <button class="danger-btn wide" type="button" data-jump="admin-payments">Review Deposits</button>
               <button class="secondary-btn wide" type="button" data-jump="admin-products" data-admin-write-only>Create Product</button>
+              <button class="secondary-btn wide" type="button" data-jump="admin-rates">Manage Rates</button>
               <button class="secondary-btn wide" type="button" data-jump="admin-methods" data-admin-write-only>Update Payment Methods</button>
               <button class="secondary-btn wide" type="button" data-jump="admin-reports">View Reports</button>
             </article>
@@ -218,6 +220,38 @@
               <div data-admin-payment-methods-list>
                 <p class="codebox">Sign in as admin to load payment methods.</p>
               </div>
+            </article>
+          </div>
+        </div>
+
+        <div class="portal-tab" id="admin-rates">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">Conversion rates</p>
+            <h2>USD wallet credit rules</h2>
+            <p>Control PHP deposit conversion. USDT deposits remain 1:1 with USD.</p>
+          </div>
+          <div class="content-grid">
+            <article class="panel form-panel" data-admin-write-only>
+              <h3>PHP Rate Control</h3>
+              <form data-admin-exchange-rate-form>
+                <div class="form-grid">
+                  <label>Live USD/PHP Rate<input type="number" name="live_rate" min="1" step="0.0001" placeholder="56.5000" required /></label>
+                  <label>Markup<input type="number" name="markup_amount" min="0" step="0.0001" placeholder="0.5000" required /></label>
+                  <label>Manual Override<input type="number" name="manual_rate" min="1" step="0.0001" placeholder="Optional final rate" /></label>
+                  <label>Status<select name="auto_enabled"><option value="true">Auto + markup</option><option value="false">Manual review</option></select></label>
+                </div>
+                <div class="form-actions">
+                  <button class="secondary-btn" type="button" data-fetch-live-rate>Fetch Live Rate</button>
+                  <button class="primary-btn" type="submit">Save Rate</button>
+                </div>
+              </form>
+            </article>
+            <article class="panel">
+              <h3>Current Platform Rate</h3>
+              <div data-admin-exchange-rate-summary>
+                <p class="codebox">Rate settings load after sign in.</p>
+              </div>
+              <p class="proof-note">Client PHP deposits use platform rate to estimate USD wallet credit. Admin can adjust final credit during approval.</p>
             </article>
           </div>
         </div>
