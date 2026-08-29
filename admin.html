@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
     <title>Private Admin | ETrader-X</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -23,32 +24,18 @@
       </a>
       <div class="header-actions">
         <a class="ghost-btn" href="index.html">Home</a>
-        <a class="secondary-btn" href="client.html">Client Preview</a>
       </div>
     </header>
 
-    <main class="portal-layout admin-portal">
-      <aside class="portal-sidebar admin-sidebar">
-        <strong>Admin Control</strong>
-        <button class="active" data-tab="admin-overview">Overview</button>
-        <button data-tab="admin-products">Products</button>
-        <button data-tab="admin-plans">Plans & Pricing</button>
-        <button data-tab="admin-payments">Payment Queue</button>
-        <button data-tab="admin-clients">Clients</button>
-        <button data-tab="admin-subscriptions">Subscriptions</button>
-        <button data-tab="admin-referrals">Referrals</button>
-        <button data-tab="admin-support">Support</button>
-        <button data-tab="admin-reports">Reports</button>
-      </aside>
-
-      <section class="portal-workspace">
+    <main class="admin-auth-gate" data-admin-auth-gate>
+      <section class="admin-login-layout">
         <div class="portal-hero">
           <div>
             <p class="eyebrow danger-text">Private admin MVP</p>
-            <h1>Control products, payments, clients, and subscription access.</h1>
+            <h1>Private ETX operations access.</h1>
             <p class="hero-lead">
-              Admin side is hidden from public UI. In the real build, Supabase Auth and role policies
-              will protect this route before any data can be viewed or changed.
+              Sign in with an approved operations role. The full workspace stays hidden until your
+              Supabase account is verified.
             </p>
           </div>
           <form class="login-card admin-login-card" aria-label="Admin verification form" data-sign-in-form>
@@ -72,11 +59,44 @@
           <h3 data-admin-gate-title>Admin sign in required</h3>
           <p>
             The private admin workspace is hidden until the signed-in account has
-            `app_metadata.role = admin` in Supabase Auth.
+            an approved operations role in Supabase Auth.
           </p>
         </article>
+      </section>
+    </main>
 
-        <div data-admin-shell class="hidden">
+    <main class="portal-layout admin-portal hidden" data-admin-shell>
+      <aside class="portal-sidebar admin-sidebar">
+        <strong>Admin Control</strong>
+        <button class="active" data-tab="admin-overview">Overview</button>
+        <button data-tab="admin-products">Products</button>
+        <button data-tab="admin-plans">Plans & Pricing</button>
+        <button data-tab="admin-payments">Payment Queue</button>
+        <button data-tab="admin-clients">Clients</button>
+        <button data-tab="admin-subscriptions">Subscriptions</button>
+        <button data-tab="admin-referrals">Referrals</button>
+        <button data-tab="admin-support">Support</button>
+        <button data-tab="admin-reports">Reports</button>
+        <button data-tab="admin-roles" data-super-user-only>Roles</button>
+      </aside>
+
+      <section class="portal-workspace">
+        <div class="portal-hero">
+          <div>
+            <p class="eyebrow danger-text">Private admin MVP</p>
+            <h1>Control products, payments, clients, and subscription access.</h1>
+            <p class="hero-lead">
+              Role-based workspace for SUPER USER, ADMIN, and MANAGER access.
+            </p>
+          </div>
+          <article class="login-card admin-login-card">
+            <strong>Signed In</strong>
+            <p class="codebox">Account: <span data-auth-email>Loading...</span></p>
+            <p class="codebox">Role: <span data-admin-role-label>Verifying...</span></p>
+            <button class="secondary-btn" type="button" data-sign-out>Sign Out</button>
+          </article>
+        </div>
+
         <div class="portal-tab active" id="admin-overview">
           <div class="stat-grid">
             <article><span>Pending Payments</span><strong data-report-pending-payments>0</strong><small>Needs review</small></article>
@@ -163,35 +183,30 @@
           <div class="content-grid">
             <article class="panel">
               <h3>Client List</h3>
-              <div class="row"><span>Richmond Sevilla</span><b class="ok">Active</b></div>
-              <div class="row"><span>Maria L.</span><b class="warn">Payment review</b></div>
-              <div class="row"><span>John P.</span><b>Expired</b></div>
-              <div class="row"><span>Anna G.</span><b class="ok">Trial</b></div>
+              <div data-admin-clients-list>
+                <p class="codebox">Sign in as admin to load clients.</p>
+              </div>
             </article>
-            <article class="panel form-panel">
-              <h3>Add Client</h3>
-              <label>Email<input type="email" placeholder="client@email.com" /></label>
-              <label>Telegram Username<input type="text" placeholder="@username" /></label>
-              <button class="primary-btn" type="button">Create Client</button>
+            <article class="panel">
+              <h3>Client Creation</h3>
+              <p class="codebox">For security, clients create their own account through the client portal. Admins manage access after payment verification.</p>
+              <button class="secondary-btn wide" type="button" data-jump="admin-payments">Review Payment Queue</button>
             </article>
           </div>
         </div>
 
         <div class="portal-tab" id="admin-subscriptions">
-          <article class="panel form-panel">
-            <h3>Activate Subscription</h3>
-            <div class="form-grid">
-              <label>Client<select><option>Maria L.</option><option>John P.</option><option>Richmond Sevilla</option></select></label>
-              <label>Product<select><option>ETX SAFY EA</option><option>ETX VIP Signal</option><option>Yugo Ashi Indicator</option></select></label>
-              <label>Plan<select><option>Premium Plan</option><option>VIP Promo</option><option>Free Trial</option></select></label>
-              <label>Expiry Date<input type="date" value="2026-09-28" /></label>
+          <article class="panel">
+            <h3>Active Subscriptions</h3>
+            <div data-admin-subscriptions-list>
+              <p class="codebox">Sign in as admin to load subscriptions.</p>
             </div>
-            <button class="danger-btn" type="button">Activate Access</button>
           </article>
           <article class="panel order-panel">
             <h3>Expiring Soon</h3>
-            <div class="row"><span>VIP Signal - Richmond Sevilla</span><b class="warn">5 days</b></div>
-            <div class="row"><span>Yugo Ashi - Anna G.</span><b class="warn">2 days</b></div>
+            <div data-admin-expiring-list>
+              <p class="codebox">No renewals due yet.</p>
+            </div>
           </article>
         </div>
 
@@ -243,11 +258,32 @@
           </div>
           <article class="panel">
             <h3>Report Exports</h3>
-            <div class="row"><span>Sales summary</span><button class="secondary-btn" type="button">Export CSV</button></div>
-            <div class="row"><span>Payment queue</span><button class="secondary-btn" type="button">Export CSV</button></div>
-            <div class="row"><span>Commission ledger</span><button class="secondary-btn" type="button">Export CSV</button></div>
+            <div class="row"><span>Sales summary</span><button class="secondary-btn" type="button" data-report-export="sales">Export CSV</button></div>
+            <div class="row"><span>Payment queue</span><button class="secondary-btn" type="button" data-report-export="payments">Export CSV</button></div>
+            <div class="row"><span>Commission ledger</span><button class="secondary-btn" type="button" data-report-export="commissions">Export CSV</button></div>
           </article>
         </div>
+
+        <div class="portal-tab" id="admin-roles">
+          <div class="content-grid">
+            <article class="panel form-panel">
+              <h3>Create Role</h3>
+              <form data-admin-role-form>
+                <div class="form-grid">
+                  <label>Role Name<input type="text" name="name" placeholder="Operations Reviewer" required /></label>
+                  <label>Role PIN<input type="text" name="role_key" placeholder="operations_reviewer" required /></label>
+                </div>
+                <label>Description<textarea name="description" placeholder="Define the purpose and allowed work for this role."></textarea></label>
+                <button class="danger-btn" type="submit">Save Role</button>
+              </form>
+            </article>
+            <article class="panel">
+              <h3>Role Registry</h3>
+              <div data-admin-roles-list>
+                <p class="codebox">SUPER USER access required to manage roles.</p>
+              </div>
+            </article>
+          </div>
         </div>
       </section>
     </main>

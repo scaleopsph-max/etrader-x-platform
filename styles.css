@@ -470,6 +470,16 @@ h3 {
   padding: 22px 0 60px;
 }
 
+.admin-auth-gate {
+  width: min(1200px, calc(100% - 32px));
+  padding: 46px 0 70px;
+}
+
+.admin-login-layout {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
 .portal-layout,
 .client-auth-gate {
   --panel: var(--glass);
@@ -932,6 +942,7 @@ textarea {
 
 @media (max-width: 640px) {
   main,
+  .admin-auth-gate,
   .client-auth-gate,
   .portal-layout {
     width: min(100% - 20px, 1400px);

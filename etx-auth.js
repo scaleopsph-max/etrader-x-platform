@@ -14,9 +14,11 @@
   const selectedPlan = document.getElementById("selected-plan");
   const paymentForm = document.querySelector("[data-payment-form]");
   const adminGate = document.querySelector("[data-admin-gate]");
+  const adminAuthGate = document.querySelector("[data-admin-auth-gate]");
   const adminShell = document.querySelector("[data-admin-shell]");
   const adminProductForm = document.querySelector("[data-admin-product-form]");
   const adminPlanForm = document.querySelector("[data-admin-plan-form]");
+  const adminRoleForm = document.querySelector("[data-admin-role-form]");
   const adminProductsList = document.querySelector("[data-admin-products-list]");
   const adminPlansList = document.querySelector("[data-admin-plans-list]");
   const adminPaymentQueue = document.querySelector("[data-admin-payment-queue]");
@@ -27,6 +29,13 @@
   const adminPriorityList = document.querySelector("[data-admin-priority-list]");
   const adminHealthList = document.querySelector("[data-admin-health-list]");
   const adminRevenueList = document.querySelector("[data-admin-revenue-list]");
+  const adminClientsList = document.querySelector("[data-admin-clients-list]");
+  const adminSubscriptionsList = document.querySelector("[data-admin-subscriptions-list]");
+  const adminExpiringList = document.querySelector("[data-admin-expiring-list]");
+  const adminRolesList = document.querySelector("[data-admin-roles-list]");
+  const superUserOnlyItems = document.querySelectorAll("[data-super-user-only]");
+  const adminOpsOnlyItems = document.querySelectorAll(".admin-sidebar [data-tab]:not([data-super-user-only]), .portal-tab:not(#admin-roles)");
+  const reportExportButtons = document.querySelectorAll("[data-report-export]");
   const clientAuthGate = document.querySelector("[data-client-auth-gate]");
   const clientAppShell = document.querySelector("[data-client-app-shell]");
   const clientFlowAlert = document.querySelector("[data-client-flow-alert]");
@@ -53,6 +62,7 @@
   let currentProfile = null;
   let currentPlan = null;
   let availableCommission = 0;
+  let adminReportSnapshot = null;
   const referredByCode = getReferralCode();
   let lastClientSnapshot = {
     hasPendingPayment: false,
@@ -69,6 +79,8 @@
     bindCommissionForm();
     bindSupportForm();
     bindAdminForms();
+    bindAdminRoleForm();
+    bindReportExports();
     bindSignOut();
     await refreshSession();
     await loadPlans();
@@ -411,6 +423,34 @@
     }
   }
 
+  function bindAdminRoleForm() {
+    if (!adminRoleForm) return;
+
+    adminRoleForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!requireSuperUser()) return;
+
+      const form = new FormData(adminRoleForm);
+      const roleKey = normalizeRoleKey(form.get("role_key"));
+      const payload = {
+        name: String(form.get("name") || "").trim(),
+        role_key: roleKey,
+        description: String(form.get("description") || "").trim(),
+        created_by: currentUser.id,
+      };
+
+      const { error } = await client.from("admin_roles").upsert(payload, { onConflict: "role_key" });
+      if (error) {
+        setStatus(error.message, "warn");
+        return;
+      }
+
+      adminRoleForm.reset();
+      setStatus("Role saved. Assign the matching app_metadata role after final permission mapping.", "ok");
+      await loadAdminRoles();
+    });
+  }
+
   async function ensureProfile(user) {
     const { data: existing } = await client.from("profiles").select("*").eq("id", user.id).maybeSingle();
     if (existing) return existing;
@@ -540,24 +580,49 @@
   }
 
   function renderAdminGate(user) {
-    if (!adminGate || !adminShell) return;
+    if (!adminGate || !adminShell || !adminAuthGate) return;
 
-    const isAdmin = user?.app_metadata?.role === "admin";
-    adminGate.classList.toggle("hidden", isAdmin);
-    adminShell.classList.toggle("hidden", !isAdmin);
+    const hasAccess = hasAdminAccess(user);
+    const isSuperUser = hasSuperUserAccess(user);
+    const isOperationsAdmin = hasOperationsAdminAccess(user);
+    adminAuthGate.classList.toggle("hidden", hasAccess);
+    adminGate.classList.toggle("hidden", hasAccess);
+    adminShell.classList.toggle("hidden", !hasAccess);
+    superUserOnlyItems.forEach((item) => item.classList.toggle("hidden", !isSuperUser));
+    adminOpsOnlyItems.forEach((item) => item.classList.toggle("hidden", isSuperUser && !isOperationsAdmin));
+    setText("[data-admin-role-label]", formatRoleLabel(user?.app_metadata?.role || "none"));
 
     if (!user) {
       setText("[data-admin-gate-title]", "Admin sign in required");
       return;
     }
 
-    if (!isAdmin) {
-      setText("[data-admin-gate-title]", "Signed in, but admin role is required");
+    if (!hasAccess) {
+      setText("[data-admin-gate-title]", "Signed in, but operations role is required");
+      return;
+    }
+
+    if (isSuperUser && !isOperationsAdmin) {
+      setStatus("SUPER USER verified. Loading role registry...", "ok");
+      goToTab("admin-roles");
+      loadAdminRoles();
       return;
     }
 
     setStatus("Admin verified. Loading operations workspace...", "ok");
     loadAdminData();
+  }
+
+  async function loadAdminRoles() {
+    if (!hasSuperUserAccess()) return;
+
+    const { data, error } = await client.from("admin_roles").select("*").order("sort_order", { ascending: true });
+    if (error) {
+      setStatus(error.message, "warn");
+      return;
+    }
+
+    renderListElement(adminRolesList, data, renderAdminRoleRow, "No custom roles yet.");
   }
 
   async function uploadPaymentProof(file) {
@@ -578,7 +643,9 @@
   async function loadAdminData() {
     if (!requireAdmin(false)) return;
 
-    const [products, plans, payments, referrals, commissionRequests, supportTickets, subscriptions, orders] = await Promise.all([
+    const roleRequest = hasSuperUserAccess() ? client.from("admin_roles").select("*").order("sort_order", { ascending: true }) : Promise.resolve({ data: [], error: null });
+
+    const [products, plans, payments, referrals, commissionRequests, supportTickets, subscriptions, orders, profiles, roles] = await Promise.all([
       client.from("products").select("*").order("sort_order", { ascending: true }),
       client.from("plans").select("*,products(name,code)").order("created_at", { ascending: false }),
       client
@@ -611,10 +678,17 @@
         .select("id,status,total_amount,currency,created_at,plans(name,products(name)),profiles!orders_client_id_fkey(full_name,email)")
         .order("created_at", { ascending: false })
         .limit(100),
+      client
+        .from("profiles")
+        .select("id,full_name,email,telegram_username,role,created_at,referral_code")
+        .eq("role", "client")
+        .order("created_at", { ascending: false })
+        .limit(100),
+      roleRequest,
     ]);
 
-    if (products.error || plans.error || payments.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error) {
-      setStatus(products.error?.message || plans.error?.message || payments.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message, "warn");
+    if (products.error || plans.error || payments.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error || profiles.error || roles.error) {
+      setStatus(products.error?.message || plans.error?.message || payments.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message || profiles.error?.message || roles.error?.message, "warn");
       return;
     }
 
@@ -624,11 +698,15 @@
     renderListElement(adminReferralList, referrals.data, renderAdminReferralRow, "No referral records yet.");
     renderListElement(adminCommissionQueue, commissionRequests.data, renderCommissionReviewCard, "No withdrawal requests yet.");
     renderListElement(adminSupportQueue, supportTickets.data, renderSupportReviewCard, "No support tickets yet.");
+    renderListElement(adminClientsList, buildClientRows(profiles.data || [], subscriptions.data || [], payments.data || []), renderMetricRow, "No client accounts yet.");
+    renderListElement(adminSubscriptionsList, subscriptions.data, renderAdminSubscriptionRow, "No subscriptions yet.");
+    renderListElement(adminExpiringList, buildExpiringRows(subscriptions.data || []), renderMetricRow, "No renewals due yet.");
+    renderListElement(adminRolesList, roles.data, renderAdminRoleRow, "No custom roles yet.");
     hydrateAdminProductOptions(products.data || []);
     bindAdminPaymentActions();
     bindAdminCommissionActions();
     bindAdminSupportActions();
-    renderAdminReports({
+    adminReportSnapshot = {
       products: products.data || [],
       plans: plans.data || [],
       payments: payments.data || [],
@@ -637,7 +715,10 @@
       supportTickets: supportTickets.data || [],
       subscriptions: subscriptions.data || [],
       orders: orders.data || [],
-    });
+      profiles: profiles.data || [],
+      roles: roles.data || [],
+    };
+    renderAdminReports(adminReportSnapshot);
   }
 
   function bindAdminPaymentActions() {
@@ -717,6 +798,76 @@
       renderMetricRow,
       "No approved payments yet."
     );
+  }
+
+  function bindReportExports() {
+    reportExportButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        if (!requireAdmin()) return;
+        if (!adminReportSnapshot) {
+          setStatus("Reports are still loading. Try again after the admin dashboard loads.", "warn");
+          return;
+        }
+
+        const type = button.dataset.reportExport;
+        const rows = buildExportRows(type, adminReportSnapshot);
+        downloadCsv(`etx-${type}-report.csv`, rows);
+        setStatus(`${type} report exported.`, "ok");
+      });
+    });
+  }
+
+  function renderAdminRoleRow(role) {
+    const systemLabel = role.is_system ? "Pinned" : "Custom";
+    return `
+      <div class="row">
+        <span>${escapeHtml(role.name)} <small>${escapeHtml(role.description || role.role_key)}</small></span>
+        <b class="${role.is_system ? "ok" : "warn"}">${escapeHtml(systemLabel)} / ${escapeHtml(role.role_key)}</b>
+      </div>
+    `;
+  }
+
+  function buildExportRows(type, snapshot) {
+    if (type === "payments") {
+      return [
+        ["Client", "Product", "Plan", "Amount", "Currency", "Status", "Reference", "Created At"],
+        ...snapshot.payments.map((payment) => [
+          payment.profiles?.email || payment.profiles?.full_name || "",
+          payment.orders?.plans?.products?.name || "",
+          payment.orders?.plans?.name || "",
+          payment.amount || 0,
+          payment.currency || "USD",
+          payment.status || "",
+          payment.transaction_reference || "",
+          payment.created_at || "",
+        ]),
+      ];
+    }
+
+    if (type === "commissions") {
+      return [
+        ["Referrer", "Referred Client", "Amount", "Status", "Created At"],
+        ...snapshot.referrals.map((referral) => [
+          referral.referrer?.email || referral.referrer?.full_name || "",
+          referral.referred?.email || referral.referred?.full_name || "",
+          referral.commission_amount || 0,
+          referral.commission_status || "",
+          referral.created_at || "",
+        ]),
+      ];
+    }
+
+    return [
+      ["Product", "Plan", "Order Status", "Amount", "Currency", "Created At"],
+      ...snapshot.orders.map((order) => [
+        order.plans?.products?.name || "",
+        order.plans?.name || "",
+        order.status || "",
+        order.total_amount || 0,
+        order.currency || "USD",
+        order.created_at || "",
+      ]),
+    ];
   }
 
   function buildPriorityRows({ pendingPayments, pendingCommissionRequests, openSupport, renewalsDue }) {
@@ -970,11 +1121,43 @@
   }
 
   function requireAdmin(showMessage = true) {
-    const isAdmin = currentUser?.app_metadata?.role === "admin";
-    if (!isAdmin && showMessage) {
-      setStatus("Admin role required.", "warn");
+    const hasAccess = hasAdminAccess();
+    if (!hasAccess && showMessage) {
+      setStatus("Operations role required.", "warn");
     }
-    return isAdmin;
+    return hasAccess;
+  }
+
+  function requireSuperUser(showMessage = true) {
+    const hasAccess = hasSuperUserAccess();
+    if (!hasAccess && showMessage) {
+      setStatus("SUPER USER role required.", "warn");
+    }
+    return hasAccess;
+  }
+
+  function hasAdminAccess(user = currentUser) {
+    return ["super_user", "admin"].includes(String(user?.app_metadata?.role || "").toLowerCase());
+  }
+
+  function hasOperationsAdminAccess(user = currentUser) {
+    return String(user?.app_metadata?.role || "").toLowerCase() === "admin";
+  }
+
+  function hasSuperUserAccess(user = currentUser) {
+    return String(user?.app_metadata?.role || "").toLowerCase() === "super_user";
+  }
+
+  function formatRoleLabel(role) {
+    return String(role || "none").replace(/_/g, " ").toUpperCase();
+  }
+
+  function normalizeRoleKey(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
   }
 
   function renderPlanCard(plan) {
@@ -1220,6 +1403,34 @@
     `;
   }
 
+  function buildClientRows(profiles, subscriptions, payments) {
+    return profiles.map((profile) => {
+      const active = subscriptions.find((subscription) => subscription.profiles?.email === profile.email && ["active", "trial"].includes(subscription.status));
+      const review = payments.find((payment) => payment.profiles?.email === profile.email && ["pending", "under_review"].includes(payment.status));
+      const label = profile.full_name || profile.email || "Client";
+      const status = active ? "active" : review ? "payment review" : "registered";
+      const tone = active ? "ok" : review ? "warn" : "";
+      return [label, status, tone];
+    });
+  }
+
+  function buildExpiringRows(subscriptions) {
+    return subscriptions
+      .filter((subscription) => ["active", "trial"].includes(subscription.status) && isWithinDays(subscription.expires_at, 7))
+      .map((subscription) => {
+        const clientName = subscription.profiles?.full_name || subscription.profiles?.email || "Client";
+        const product = subscription.products?.name || "ETX Product";
+        const days = daysUntil(subscription.expires_at);
+        return [`${product} - ${clientName}`, `${days} days`, "warn"];
+      });
+  }
+
+  function renderAdminSubscriptionRow(subscription) {
+    const clientName = subscription.profiles?.full_name || subscription.profiles?.email || "Client";
+    const product = subscription.products?.name || "ETX Product";
+    return `<div class="row"><span>${escapeHtml(product)} <small>${escapeHtml(clientName)}</small></span><b class="${statusClass(subscription.status)}">${escapeHtml(formatStatus(subscription.status))} until ${escapeHtml(formatDate(subscription.expires_at))}</b></div>`;
+  }
+
   function renderCommissionReviewCard(request) {
     const clientName = request.profiles?.full_name || request.profiles?.email || "Client";
     const canReview = request.status === "requested";
@@ -1303,6 +1514,11 @@
     return value ? new Date(value).toLocaleDateString() : "No expiry";
   }
 
+  function daysUntil(value) {
+    if (!value) return "--";
+    return Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 86400000));
+  }
+
   function isToday(value) {
     if (!value) return false;
     const date = new Date(value);
@@ -1316,6 +1532,21 @@
     const now = new Date();
     const diff = date.getTime() - now.getTime();
     return diff >= 0 && diff <= days * 86400000;
+  }
+
+  function downloadCsv(filename, rows) {
+    const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function csvCell(value) {
+    return `"${String(value ?? "").replace(/"/g, '""')}"`;
   }
 
   function escapeHtml(value) {
