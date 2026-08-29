@@ -31,9 +31,11 @@ This module defines the database foundation for the ETrader-X MVP.
 - The `anon` role has table-level read access only to `products` and `plans`; private tables are authenticated/admin only.
 - Clients can read and create their own orders, payments, tickets, and commission requests.
 - Clients can read their own subscriptions and referral-related rows.
-- Admin access is based on `auth.jwt()->app_metadata.role = 'admin'`.
-- Admin-only writes are required for products, plans, subscriptions, referrals, reports, and audit logs.
-- The Roles page is prepared for `app_metadata.role = 'super_user'`, but broader SUPER USER operations access and MANAGER permissions need an explicit permission matrix before release.
+- Operations access is based on `auth.jwt()->app_metadata.role`, using `super_user`, `admin`, and `manager`.
+- `super_user`: full owner-level operations plus role registry management.
+- `admin`: full daily operations, including products, pricing, payments, subscriptions, referrals, support, and reports.
+- `manager`: read access for operations/reports/client context, payment-proof review, and support ticket updates only.
+- Products, pricing, payment approval, subscription activation, referral/commission changes, and role management are blocked for `manager`.
 
 ## Important Implementation Notes
 

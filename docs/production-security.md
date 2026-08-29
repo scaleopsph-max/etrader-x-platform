@@ -13,6 +13,10 @@
 - Mock client/subscription data was removed from admin UI.
 - Admin login now hides the sidebar and operations workspace until role verification passes.
 - `admin_roles` registry is seeded with SUPER USER, ADMIN, and MANAGER.
+- Role permission matrix is enforced in UI and Supabase RLS:
+  - SUPER USER: full operations plus role registry.
+  - ADMIN: full operations except role registry.
+  - MANAGER: view/report/support access only.
 
 ## Required Supabase Dashboard Toggle
 
@@ -23,8 +27,7 @@
 ## Pre-Launch Manual Checks
 
 - Confirm the first real admin user has `app_metadata.role = admin`.
-- Define the final MANAGER permission matrix before granting it access to sensitive tables.
-- Approve whether SUPER USER should have full operations access or role-registry-only access.
+- Confirm which real user accounts should receive `super_user`, `admin`, or `manager` in Supabase Auth app metadata.
 - Keep email confirmation enabled unless the business intentionally wants instant signup.
 - Rotate publishable keys if they were shared outside the repo workflow.
 - Test real client signup, proof upload, admin approval, subscription activation, referral commission, withdrawal, and support tickets.

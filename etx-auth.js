@@ -34,7 +34,7 @@
   const adminExpiringList = document.querySelector("[data-admin-expiring-list]");
   const adminRolesList = document.querySelector("[data-admin-roles-list]");
   const superUserOnlyItems = document.querySelectorAll("[data-super-user-only]");
-  const adminOpsOnlyItems = document.querySelectorAll(".admin-sidebar [data-tab]:not([data-super-user-only]), .portal-tab:not(#admin-roles)");
+  const adminWriteOnlyItems = document.querySelectorAll("[data-admin-write-only]");
   const reportExportButtons = document.querySelectorAll("[data-report-export]");
   const clientAuthGate = document.querySelector("[data-client-auth-gate]");
   const clientAppShell = document.querySelector("[data-client-app-shell]");
@@ -366,7 +366,7 @@
     if (adminProductForm) {
       adminProductForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        if (!requireAdmin()) return;
+        if (!requireAdminWrite()) return;
 
         const form = new FormData(adminProductForm);
         const payload = {
@@ -395,7 +395,7 @@
     if (adminPlanForm) {
       adminPlanForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        if (!requireAdmin()) return;
+        if (!requireAdminWrite()) return;
 
         const form = new FormData(adminPlanForm);
         const payload = {
@@ -584,12 +584,12 @@
 
     const hasAccess = hasAdminAccess(user);
     const isSuperUser = hasSuperUserAccess(user);
-    const isOperationsAdmin = hasOperationsAdminAccess(user);
+    const canWrite = hasAdminWriteAccess(user);
     adminAuthGate.classList.toggle("hidden", hasAccess);
     adminGate.classList.toggle("hidden", hasAccess);
     adminShell.classList.toggle("hidden", !hasAccess);
     superUserOnlyItems.forEach((item) => item.classList.toggle("hidden", !isSuperUser));
-    adminOpsOnlyItems.forEach((item) => item.classList.toggle("hidden", isSuperUser && !isOperationsAdmin));
+    adminWriteOnlyItems.forEach((item) => item.classList.toggle("hidden", !canWrite));
     setText("[data-admin-role-label]", formatRoleLabel(user?.app_metadata?.role || "none"));
 
     if (!user) {
@@ -602,14 +602,7 @@
       return;
     }
 
-    if (isSuperUser && !isOperationsAdmin) {
-      setStatus("SUPER USER verified. Loading role registry...", "ok");
-      goToTab("admin-roles");
-      loadAdminRoles();
-      return;
-    }
-
-    setStatus("Admin verified. Loading operations workspace...", "ok");
+    setStatus(`${formatRoleLabel(user.app_metadata?.role)} verified. Loading operations workspace...`, "ok");
     loadAdminData();
   }
 
@@ -724,7 +717,13 @@
   function bindAdminPaymentActions() {
     document.querySelectorAll("[data-admin-approve], [data-admin-reject], [data-proof-path], [data-admin-product-status], [data-admin-plan-status]").forEach((button) => {
       button.addEventListener("click", async () => {
-        if (!requireAdmin()) return;
+        if (button.hasAttribute("data-proof-path")) {
+          if (!requireAdmin()) return;
+          await openProof(button.dataset.proofPath);
+          return;
+        }
+
+        if (!requireAdminWrite()) return;
 
         if (button.hasAttribute("data-admin-product-status")) {
           await updateRecordStatus("products", button.dataset.productId, button.dataset.adminProductStatus);
@@ -737,11 +736,6 @@
         }
 
         const paymentId = button.dataset.paymentId;
-        if (button.hasAttribute("data-proof-path")) {
-          await openProof(button.dataset.proofPath);
-          return;
-        }
-
         if (button.hasAttribute("data-admin-approve")) {
           await approvePayment(paymentId);
           return;
@@ -898,7 +892,7 @@
   function bindAdminCommissionActions() {
     document.querySelectorAll("[data-admin-commission-approve], [data-admin-commission-reject]").forEach((button) => {
       button.addEventListener("click", async () => {
-        if (!requireAdmin()) return;
+        if (!requireAdminWrite()) return;
 
         if (button.hasAttribute("data-admin-commission-approve")) {
           await updateCommissionRequest(button.dataset.requestId, "approved");
@@ -952,7 +946,7 @@
   function bindAdminSupportActions() {
     document.querySelectorAll("[data-admin-ticket-status]").forEach((button) => {
       button.addEventListener("click", async () => {
-        if (!requireAdmin()) return;
+        if (!requireSupportAccess()) return;
         await updateSupportTicket(button.dataset.ticketId, button.dataset.adminTicketStatus);
       });
     });
@@ -1128,6 +1122,22 @@
     return hasAccess;
   }
 
+  function requireAdminWrite(showMessage = true) {
+    const hasAccess = hasAdminWriteAccess();
+    if (!hasAccess && showMessage) {
+      setStatus("ADMIN or SUPER USER role required for this action.", "warn");
+    }
+    return hasAccess;
+  }
+
+  function requireSupportAccess(showMessage = true) {
+    const hasAccess = hasSupportAccess();
+    if (!hasAccess && showMessage) {
+      setStatus("Support access role required.", "warn");
+    }
+    return hasAccess;
+  }
+
   function requireSuperUser(showMessage = true) {
     const hasAccess = hasSuperUserAccess();
     if (!hasAccess && showMessage) {
@@ -1137,11 +1147,15 @@
   }
 
   function hasAdminAccess(user = currentUser) {
+    return ["super_user", "admin", "manager"].includes(String(user?.app_metadata?.role || "").toLowerCase());
+  }
+
+  function hasAdminWriteAccess(user = currentUser) {
     return ["super_user", "admin"].includes(String(user?.app_metadata?.role || "").toLowerCase());
   }
 
-  function hasOperationsAdminAccess(user = currentUser) {
-    return String(user?.app_metadata?.role || "").toLowerCase() === "admin";
+  function hasSupportAccess(user = currentUser) {
+    return ["super_user", "admin", "manager"].includes(String(user?.app_metadata?.role || "").toLowerCase());
   }
 
   function hasSuperUserAccess(user = currentUser) {
@@ -1348,22 +1362,28 @@
 
   function renderAdminProductRow(product) {
     const nextStatus = product.status === "active" ? "hidden" : "active";
+    const actionButton = hasAdminWriteAccess()
+      ? `<button class="secondary-btn" type="button" data-admin-product-status="${escapeHtml(nextStatus)}" data-product-id="${escapeHtml(product.id)}">${escapeHtml(nextStatus)}</button>`
+      : "";
     return `
       <div class="row">
         <span>${escapeHtml(product.name)} <small>${escapeHtml(product.code)}</small></span>
         <b class="${product.status === "active" ? "ok" : "warn"}">${escapeHtml(product.status)}</b>
-        <button class="secondary-btn" type="button" data-admin-product-status="${escapeHtml(nextStatus)}" data-product-id="${escapeHtml(product.id)}">${escapeHtml(nextStatus)}</button>
+        ${actionButton}
       </div>
     `;
   }
 
   function renderAdminPlanRow(plan) {
     const nextStatus = plan.status === "active" ? "hidden" : "active";
+    const actionButton = hasAdminWriteAccess()
+      ? `<button class="secondary-btn" type="button" data-admin-plan-status="${escapeHtml(nextStatus)}" data-plan-id="${escapeHtml(plan.id)}">${escapeHtml(nextStatus)}</button>`
+      : "";
     return `
       <div class="row">
         <span>${escapeHtml(plan.products?.name || "ETX Product")} / ${escapeHtml(plan.name)}</span>
         <b>${escapeHtml(formatMoney(Number(plan.price_amount), plan.currency))}</b>
-        <button class="secondary-btn" type="button" data-admin-plan-status="${escapeHtml(nextStatus)}" data-plan-id="${escapeHtml(plan.id)}">${escapeHtml(nextStatus)}</button>
+        ${actionButton}
       </div>
     `;
   }
@@ -1375,6 +1395,12 @@
     const proofButton = payment.proof_path
       ? `<button class="secondary-btn" type="button" data-proof-path="${escapeHtml(payment.proof_path)}" data-payment-id="${escapeHtml(payment.id)}">View Proof</button>`
       : `<span class="warn">No file</span>`;
+    const reviewButtons = hasAdminWriteAccess()
+      ? `
+        <button class="primary-btn" type="button" data-admin-approve data-payment-id="${escapeHtml(payment.id)}">Approve</button>
+        <button class="secondary-btn" type="button" data-admin-reject data-payment-id="${escapeHtml(payment.id)}">Reject</button>
+      `
+      : `<span class="warn">Review only</span>`;
 
     return `
       <div class="approval-card" data-payment-card="${escapeHtml(payment.id)}">
@@ -1385,8 +1411,7 @@
         </div>
         <span class="${payment.status === "approved" ? "ok" : payment.status === "rejected" ? "rejected" : "warn"}">${escapeHtml(payment.status)}</span>
         ${proofButton}
-        <button class="primary-btn" type="button" data-admin-approve data-payment-id="${escapeHtml(payment.id)}">Approve</button>
-        <button class="secondary-btn" type="button" data-admin-reject data-payment-id="${escapeHtml(payment.id)}">Reject</button>
+        ${reviewButtons}
       </div>
     `;
   }
@@ -1433,7 +1458,13 @@
 
   function renderCommissionReviewCard(request) {
     const clientName = request.profiles?.full_name || request.profiles?.email || "Client";
-    const canReview = request.status === "requested";
+    const canReview = request.status === "requested" && hasAdminWriteAccess();
+    const actions = hasAdminWriteAccess()
+      ? `
+        <button class="primary-btn" type="button" data-admin-commission-approve data-request-id="${escapeHtml(request.id)}"${canReview ? "" : " disabled"}>Approve</button>
+        <button class="secondary-btn" type="button" data-admin-commission-reject data-request-id="${escapeHtml(request.id)}"${canReview ? "" : " disabled"}>Reject</button>
+      `
+      : `<span class="warn">View only</span>`;
     return `
       <div class="approval-card" data-commission-card="${escapeHtml(request.id)}">
         <div>
@@ -1442,8 +1473,7 @@
         </div>
         <span class="${statusClass(request.status)}">${escapeHtml(formatStatus(request.status))}</span>
         <strong>${escapeHtml(formatMoney(Number(request.amount), "USD"))}</strong>
-        <button class="primary-btn" type="button" data-admin-commission-approve data-request-id="${escapeHtml(request.id)}"${canReview ? "" : " disabled"}>Approve</button>
-        <button class="secondary-btn" type="button" data-admin-commission-reject data-request-id="${escapeHtml(request.id)}"${canReview ? "" : " disabled"}>Reject</button>
+        ${actions}
       </div>
     `;
   }

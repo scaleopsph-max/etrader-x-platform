@@ -69,8 +69,8 @@
       <aside class="portal-sidebar admin-sidebar">
         <strong>Admin Control</strong>
         <button class="active" data-tab="admin-overview">Overview</button>
-        <button data-tab="admin-products">Products</button>
-        <button data-tab="admin-plans">Plans & Pricing</button>
+        <button data-tab="admin-products" data-admin-write-only>Products</button>
+        <button data-tab="admin-plans" data-admin-write-only>Plans & Pricing</button>
         <button data-tab="admin-payments">Payment Queue</button>
         <button data-tab="admin-clients">Clients</button>
         <button data-tab="admin-subscriptions">Subscriptions</button>
@@ -113,7 +113,7 @@
             <article class="panel">
               <h3>Quick Actions</h3>
               <button class="danger-btn wide" type="button" data-jump="admin-payments">Review Payments</button>
-              <button class="secondary-btn wide" type="button" data-jump="admin-products">Create Product</button>
+              <button class="secondary-btn wide" type="button" data-jump="admin-products" data-admin-write-only>Create Product</button>
               <button class="secondary-btn wide" type="button" data-jump="admin-reports">View Reports</button>
             </article>
           </div>
@@ -123,7 +123,7 @@
           <div class="content-grid">
             <article class="panel form-panel">
               <h3>Create Product</h3>
-              <form data-admin-product-form>
+              <form data-admin-product-form data-admin-write-only>
                 <div class="form-grid">
                   <label>Product Name<input type="text" name="name" placeholder="ETX SAFY Expert Advisor" required /></label>
                   <label>Product Code<input type="text" name="code" placeholder="SAFY-EA" required /></label>
@@ -147,7 +147,7 @@
         <div class="portal-tab" id="admin-plans">
           <article class="panel form-panel">
             <h3>Plans & Pricing</h3>
-            <form data-admin-plan-form>
+            <form data-admin-plan-form data-admin-write-only>
               <div class="form-grid">
                 <label>Product<select name="product_id" data-admin-plan-product required></select></label>
                 <label>Plan Name<input type="text" name="name" placeholder="Premium Plan" required /></label>
