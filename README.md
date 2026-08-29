@@ -5,6 +5,7 @@ Premium landing page and MVP framework for the ETrader-X trading products platfo
 ## Current Module
 
 - Premium public landing page
+- Imported Yugo Ashi product landing page based on `antigoderiv/ETX-Products`
 - Conversion CTAs
 - Urgency promo section
 - Product catalog blocks
@@ -24,6 +25,13 @@ Premium landing page and MVP framework for the ETrader-X trading products platfo
 - GitHub for source control
 - Cloudflare Pages for hosting
 - Supabase for Auth, Postgres database, and Storage
+
+## Landing Source
+
+The public `index.html` is adapted from the teammate landing repository:
+`https://github.com/antigoderiv/ETX-Products`.
+
+Imported landing assets live under `assets/`. Public CTAs are connected to the ETX `client.html` subscription flow.
 
 ## MVP Modules
 
