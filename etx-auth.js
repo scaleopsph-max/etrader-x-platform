@@ -59,6 +59,7 @@
   const supportThread = document.querySelector("[data-support-thread]");
   const clientNotifications = document.querySelector("[data-client-notifications]");
   const notificationBadge = document.querySelector("[data-notification-badge]");
+  const notificationButton = document.querySelector("[data-notification-button]");
   const markNotificationsReadButton = document.querySelector("[data-mark-notifications-read]");
   const aiChatForm = document.querySelector("[data-ai-chat-form]");
   const aiChatMessages = document.querySelector("[data-ai-chat-messages]");
@@ -513,7 +514,7 @@
     }
 
     if (text.includes("referral") || text.includes("refer") || text.includes("commission") || text.includes("withdraw")) {
-      return "For referrals: copy your referral link from the Referral page. Commissions become available after a referred client's wallet purchase. Withdrawal requests are reviewed by admin.";
+      return "For referrals: copy your referral link from the Referral page. You earn 5% when a referred client buys a plan using wallet balance. Withdrawal requests are reviewed by admin.";
     }
 
     if (text.includes("verify") || text.includes("verification") || text.includes("approved") || text.includes("pending") || text.includes("rejected")) {
@@ -882,6 +883,7 @@
     if (!clientAuthGate || !clientAppShell) return;
     clientAuthGate.classList.toggle("hidden", isSignedIn);
     clientAppShell.classList.toggle("hidden", !isSignedIn);
+    notificationButton?.classList.toggle("hidden", !isSignedIn);
   }
 
   function renderProfile(profile) {
@@ -1517,34 +1519,6 @@
     await loadAdminData();
   }
 
-  async function createReferralCommission(payment) {
-    const referralCode = payment.orders?.referral_code_used;
-    if (!referralCode) return null;
-
-    const { data: referrer, error: referrerError } = await client
-      .from("profiles")
-      .select("id")
-      .eq("referral_code", referralCode)
-      .neq("id", payment.client_id)
-      .maybeSingle();
-
-    if (referrerError || !referrer) return referrerError || null;
-
-    const commissionAmount = Number((Number(payment.amount || 0) * 0.1).toFixed(2));
-    const { error } = await client.from("referrals").upsert(
-      {
-        referrer_id: referrer.id,
-        referred_client_id: payment.client_id,
-        order_id: payment.order_id,
-        commission_amount: commissionAmount,
-        commission_status: "available",
-      },
-      { onConflict: "referrer_id,referred_client_id" }
-    );
-
-    return error || null;
-  }
-
   async function rejectDeposit(depositId) {
     const reviewNotes = getAdminReviewNotes();
     const { data: deposit, error: readError } = await client.from("deposit_requests").select("client_id").eq("id", depositId).single();
@@ -2078,12 +2052,13 @@
     const proofButton = deposit.proof_path
       ? `<button class="secondary-btn" type="button" data-proof-path="${escapeHtml(deposit.proof_path)}" data-deposit-id="${escapeHtml(deposit.id)}">View Proof</button>`
       : `<span class="warn">No file</span>`;
-    const reviewButtons = hasAdminWriteAccess()
+    const canReview = deposit.status === "under_review" && hasAdminWriteAccess();
+    const reviewButtons = canReview
       ? `
         <button class="primary-btn" type="button" data-admin-approve data-deposit-id="${escapeHtml(deposit.id)}">Approve</button>
         <button class="secondary-btn" type="button" data-admin-reject data-deposit-id="${escapeHtml(deposit.id)}">Reject</button>
       `
-      : `<span class="warn">Review only</span>`;
+      : `<span class="${deposit.status === "approved" ? "ok" : deposit.status === "rejected" ? "rejected" : "warn"}">${escapeHtml(deposit.status === "under_review" ? "Review only" : "Final")}</span>`;
 
     return `
       <div class="approval-card" data-deposit-card="${escapeHtml(deposit.id)}">
@@ -2146,12 +2121,12 @@
   function renderCommissionReviewCard(request) {
     const clientName = request.profiles?.full_name || request.profiles?.email || "Client";
     const canReview = request.status === "requested" && hasAdminWriteAccess();
-    const actions = hasAdminWriteAccess()
+    const actions = canReview
       ? `
-        <button class="primary-btn" type="button" data-admin-commission-approve data-request-id="${escapeHtml(request.id)}"${canReview ? "" : " disabled"}>Approve</button>
-        <button class="secondary-btn" type="button" data-admin-commission-reject data-request-id="${escapeHtml(request.id)}"${canReview ? "" : " disabled"}>Reject</button>
+        <button class="primary-btn" type="button" data-admin-commission-approve data-request-id="${escapeHtml(request.id)}">Approve</button>
+        <button class="secondary-btn" type="button" data-admin-commission-reject data-request-id="${escapeHtml(request.id)}">Reject</button>
       `
-      : `<span class="warn">View only</span>`;
+      : `<span class="${statusClass(request.status)}">${hasAdminWriteAccess() ? "Final" : "View only"}</span>`;
     return `
       <div class="approval-card" data-commission-card="${escapeHtml(request.id)}">
         <div>

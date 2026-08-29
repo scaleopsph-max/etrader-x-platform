@@ -153,7 +153,7 @@ begin
     select id into referrer_id from public.profiles where referral_code = upper(trim(referral_code)) and id <> buyer_id;
     if referrer_id is not null then
       insert into public.referrals (referrer_id, referred_client_id, order_id, commission_amount, commission_status)
-      values (referrer_id, buyer_id, new_order_id, round(selected_plan.price_amount * 0.10, 2), 'available')
+      values (referrer_id, buyer_id, new_order_id, round(selected_plan.price_amount * 0.05, 2), 'available')
       on conflict (referrer_id, referred_client_id) do update
       set order_id = excluded.order_id,
           commission_amount = excluded.commission_amount,

@@ -22,6 +22,10 @@
         </span>
       </a>
       <div class="header-actions">
+        <button class="secondary-btn notification-btn hidden" type="button" data-jump="overview" data-notification-button aria-label="Open notifications">
+          <span>Notifications</span>
+          <span class="nav-badge hidden" data-notification-badge>0</span>
+        </button>
         <a class="ghost-btn" href="index.html#plans">Products</a>
       </div>
     </header>
@@ -75,7 +79,7 @@
         <button data-tab="payments">Wallet / Deposit</button>
         <button data-tab="subscriptions">Subscriptions</button>
         <button data-tab="referrals">Referral</button>
-        <button data-tab="support">Support <span class="nav-badge hidden" data-notification-badge>0</span></button>
+        <button data-tab="support">Support</button>
         <div class="sidebar-account">
           <small>Signed in as</small>
           <strong data-auth-email>Not signed in</strong>
@@ -261,6 +265,7 @@
           <div class="content-grid">
             <article class="panel">
               <h3>Referral Program</h3>
+              <p>Earn 5% when a referred client buys an ETX plan using approved wallet balance.</p>
               <p class="codebox" data-referral-link>Sign in to generate referral link.</p>
               <button class="secondary-btn wide" type="button">Copy Referral Link</button>
             </article>
