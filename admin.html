@@ -79,26 +79,24 @@
         <button data-tab="admin-support">Support</button>
         <button data-tab="admin-reports">Reports</button>
         <button data-tab="admin-roles" data-super-user-only>Roles</button>
+        <div class="sidebar-account">
+          <small>Signed in as</small>
+          <strong data-auth-email>Loading...</strong>
+          <small>Role</small>
+          <strong data-admin-role-label>Verifying...</strong>
+          <button class="secondary-btn wide" type="button" data-sign-out>Sign Out</button>
+        </div>
       </aside>
 
       <section class="portal-workspace">
-        <div class="portal-hero">
-          <div>
-            <p class="eyebrow danger-text">Private admin MVP</p>
-            <h1>Control products, payments, clients, and subscription access.</h1>
-            <p class="hero-lead">
-              Role-based workspace for SUPER USER, ADMIN, and MANAGER access.
-            </p>
-          </div>
-          <article class="login-card admin-login-card">
-            <strong>Signed In</strong>
-            <p class="codebox">Account: <span data-auth-email>Loading...</span></p>
-            <p class="codebox">Role: <span data-admin-role-label>Verifying...</span></p>
-            <button class="secondary-btn" type="button" data-sign-out>Sign Out</button>
-          </article>
-        </div>
+        <p class="codebox portal-status" data-auth-status>Operations workspace ready.</p>
 
         <div class="portal-tab active" id="admin-overview">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">Admin overview</p>
+            <h2>Operations dashboard</h2>
+            <p>Review priority work, revenue status, and live access health.</p>
+          </div>
           <div class="stat-grid">
             <article><span>Pending Payments</span><strong data-report-pending-payments>0</strong><small>Needs review</small></article>
             <article><span>Active Subscriptions</span><strong data-report-active-subscriptions>0</strong><small>Live access records</small></article>
@@ -128,6 +126,11 @@
         </div>
 
         <div class="portal-tab" id="admin-products">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">Products</p>
+            <h2>Product catalog</h2>
+            <p>Create, publish, or hide ETX products shown to clients.</p>
+          </div>
           <div class="content-grid">
             <article class="panel form-panel">
               <h3>Create Product</h3>
@@ -153,6 +156,11 @@
         </div>
 
         <div class="portal-tab" id="admin-plans">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">Plans</p>
+            <h2>Plans and pricing</h2>
+            <p>Attach pricing, duration, bonus days, and trial settings to products.</p>
+          </div>
           <article class="panel form-panel">
             <h3>Plans & Pricing</h3>
             <form data-admin-plan-form data-admin-write-only>
@@ -178,6 +186,11 @@
         </div>
 
         <div class="portal-tab" id="admin-methods">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">Payment methods</p>
+            <h2>Payment directory</h2>
+            <p>Control the active payment accounts and instructions clients can use.</p>
+          </div>
           <div class="content-grid">
             <article class="panel form-panel" data-admin-write-only>
               <h3>Create Payment Method</h3>
@@ -207,6 +220,11 @@
         </div>
 
         <div class="portal-tab" id="admin-payments">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">Payment queue</p>
+            <h2>Payment verification</h2>
+            <p>Review submitted proofs, approve valid payments, or request correction.</p>
+          </div>
           <article class="panel">
             <h3>Payment Approval Queue</h3>
             <div data-admin-payment-queue>
@@ -217,6 +235,11 @@
         </div>
 
         <div class="portal-tab" id="admin-clients">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">Clients</p>
+            <h2>Client accounts</h2>
+            <p>Monitor registered clients and their latest payment or subscription status.</p>
+          </div>
           <div class="content-grid">
             <article class="panel">
               <h3>Client List</h3>
@@ -233,6 +256,11 @@
         </div>
 
         <div class="portal-tab" id="admin-subscriptions">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">Subscriptions</p>
+            <h2>Active access</h2>
+            <p>Track live subscriptions, trial access, and upcoming renewals.</p>
+          </div>
           <article class="panel">
             <h3>Active Subscriptions</h3>
             <div data-admin-subscriptions-list>
@@ -248,6 +276,11 @@
         </div>
 
         <div class="portal-tab" id="admin-referrals">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">Referrals</p>
+            <h2>Referral ledger</h2>
+            <p>Review commissions and withdrawal requests from approved referrals.</p>
+          </div>
           <div class="content-grid">
             <article class="panel">
               <h3>Referral Performance</h3>
@@ -265,6 +298,11 @@
         </div>
 
         <div class="portal-tab" id="admin-support">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">Support</p>
+            <h2>Support queue</h2>
+            <p>Update ticket status so clients receive clear notifications.</p>
+          </div>
           <article class="panel">
             <h3>Support Queue</h3>
             <div data-admin-support-queue>
@@ -274,6 +312,11 @@
         </div>
 
         <div class="portal-tab" id="admin-reports">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">Reports</p>
+            <h2>Operations reports</h2>
+            <p>Export sales, payment queue, and commission data for review.</p>
+          </div>
           <div class="stat-grid">
             <article><span>Payments Today</span><strong data-report-payments-today>0</strong><small>Submitted today</small></article>
             <article><span>Pending Revenue</span><strong data-report-pending-revenue>$0.00</strong><small>Awaiting review</small></article>
@@ -302,6 +345,11 @@
         </div>
 
         <div class="portal-tab" id="admin-roles">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">Roles</p>
+            <h2>Role registry</h2>
+            <p>SUPER USER controls role definitions and admin access planning.</p>
+          </div>
           <div class="content-grid">
             <article class="panel form-panel">
               <h3>Create Role</h3>

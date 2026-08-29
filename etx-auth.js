@@ -1804,8 +1804,9 @@
   function renderAdminNotificationRow(notification) {
     const recipient = notification.recipient?.full_name || notification.recipient?.email || "Client";
     return `
-      <div class="notice-row ${notification.status === "unread" ? "warn" : "ok"}">
-        <strong>${escapeHtml(notification.title)} <small>${escapeHtml(recipient)}</small></strong>
+      <div class="notice-row admin-notice ${notification.status === "unread" ? "warn" : "ok"}">
+        <strong>${escapeHtml(notification.title)}</strong>
+        <small>${escapeHtml(recipient)} / ${escapeHtml(formatStatus(notification.category))} / ${escapeHtml(formatDateTime(notification.created_at))}</small>
         <span>${escapeHtml(notification.message)}</span>
       </div>
     `;
@@ -1831,8 +1832,9 @@
 
   function setStatus(message, tone) {
     authStatuses.forEach((authStatus) => {
+      const isPortalStatus = authStatus.classList.contains("portal-status");
       authStatus.textContent = message;
-      authStatus.className = `codebox${tone ? ` ${tone}` : ""}`;
+      authStatus.className = `codebox${isPortalStatus ? " portal-status" : ""}${tone ? ` ${tone}` : ""}`;
     });
   }
 
