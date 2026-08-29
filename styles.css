@@ -714,6 +714,28 @@ textarea {
   grid-template-columns: 1fr;
 }
 
+.method-details {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid rgba(25, 216, 255, 0.28);
+  border-radius: 8px;
+  background: rgba(25, 216, 255, 0.08);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  padding: 14px;
+}
+
+.method-details strong {
+  color: var(--text);
+}
+
+.method-details a,
+.method-details small {
+  color: var(--cyan);
+}
+
 .panel {
   border: 1px solid var(--line);
   border-radius: 8px;

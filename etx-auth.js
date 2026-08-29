@@ -13,14 +13,18 @@
   const dynamicPlanGrid = document.querySelector("[data-dynamic-plans]");
   const selectedPlan = document.getElementById("selected-plan");
   const paymentForm = document.querySelector("[data-payment-form]");
+  const paymentMethodSelect = document.querySelector("[data-payment-method-select]");
+  const paymentMethodDetails = document.querySelector("[data-payment-method-details]");
   const adminGate = document.querySelector("[data-admin-gate]");
   const adminAuthGate = document.querySelector("[data-admin-auth-gate]");
   const adminShell = document.querySelector("[data-admin-shell]");
   const adminProductForm = document.querySelector("[data-admin-product-form]");
   const adminPlanForm = document.querySelector("[data-admin-plan-form]");
+  const adminPaymentMethodForm = document.querySelector("[data-admin-payment-method-form]");
   const adminRoleForm = document.querySelector("[data-admin-role-form]");
   const adminProductsList = document.querySelector("[data-admin-products-list]");
   const adminPlansList = document.querySelector("[data-admin-plans-list]");
+  const adminPaymentMethodsList = document.querySelector("[data-admin-payment-methods-list]");
   const adminPaymentQueue = document.querySelector("[data-admin-payment-queue]");
   const adminPlanProductSelect = document.querySelector("[data-admin-plan-product]");
   const adminReferralList = document.querySelector("[data-admin-referral-list]");
@@ -33,6 +37,7 @@
   const adminSubscriptionsList = document.querySelector("[data-admin-subscriptions-list]");
   const adminExpiringList = document.querySelector("[data-admin-expiring-list]");
   const adminRolesList = document.querySelector("[data-admin-roles-list]");
+  const adminNotificationsList = document.querySelector("[data-admin-notifications-list]");
   const superUserOnlyItems = document.querySelectorAll("[data-super-user-only]");
   const adminWriteOnlyItems = document.querySelectorAll("[data-admin-write-only]");
   const reportExportButtons = document.querySelectorAll("[data-report-export]");
@@ -61,6 +66,7 @@
   let currentUser = null;
   let currentProfile = null;
   let currentPlan = null;
+  let paymentMethodsCache = [];
   let availableCommission = 0;
   let adminReportSnapshot = null;
   const referredByCode = getReferralCode();
@@ -76,6 +82,7 @@
     bindAuthModeToggle();
     bindProfileForm();
     bindPaymentForm();
+    bindPaymentMethodSelect();
     bindCommissionForm();
     bindSupportForm();
     bindAdminForms();
@@ -103,6 +110,7 @@
     currentUser = data.user;
     currentProfile = await ensureProfile(data.user);
     renderSignedIn();
+    await loadPaymentMethods();
     await hydrateClientData();
     renderAdminGate(data.user);
   }
@@ -226,6 +234,12 @@
       }
 
       const form = new FormData(paymentForm);
+      const selectedMethod = paymentMethodsCache.find((method) => method.method_key === String(form.get("method") || ""));
+      if (!selectedMethod) {
+        setStatus("Select an active payment method first.", "warn");
+        return;
+      }
+
       const { data: order, error: orderError } = await client
         .from("orders")
         .insert({
@@ -252,23 +266,34 @@
         setStatus(error.message, "warn");
         return;
       }
-      const { error: paymentError } = await client.from("payments").insert({
+      const { data: payment, error: paymentError } = await client.from("payments").insert({
         order_id: order.id,
         client_id: currentUser.id,
-        method: String(form.get("method") || "gcash"),
+        method: selectedMethod.method_key,
+        payment_method_id: selectedMethod.id,
         status: "under_review",
         amount: Number(form.get("amount") || currentPlan.price_amount),
         currency: currentPlan.currency,
         transaction_reference: String(form.get("transaction_reference") || "").trim(),
         proof_path: proofPath,
-      });
+      }).select("id").single();
 
       if (paymentError) {
         setStatus(paymentError.message, "warn");
         return;
       }
 
+      await createNotification({
+        recipientId: currentUser.id,
+        title: "Payment submitted",
+        message: `${selectedMethod.name} proof received. Please wait for admin verification.`,
+        category: "payment",
+        entityTable: "payments",
+        entityId: payment.id,
+      });
+
       paymentForm.reset();
+      renderPaymentMethodOptions();
       setStatus("Payment submitted for admin review.", "ok");
       setClientFlow("verification", "Payment received. Please wait while admin verifies your payment proof.");
       goToTab("subscriptions");
@@ -316,6 +341,14 @@
         return;
       }
 
+      await createNotification({
+        recipientId: currentUser.id,
+        title: "Withdrawal request submitted",
+        message: "Your referral withdrawal request is now waiting for admin review.",
+        category: "commission",
+        entityTable: "commission_requests",
+      });
+
       commissionForm.reset();
       setStatus("Commission withdrawal request submitted for admin review.", "ok");
       await hydrateClientData();
@@ -334,17 +367,26 @@
       }
 
       const form = new FormData(supportForm);
-      const { error } = await client.from("support_tickets").insert({
+      const { data: ticket, error } = await client.from("support_tickets").insert({
         client_id: currentUser.id,
         subject: String(form.get("subject") || "").trim(),
         message: String(form.get("message") || "").trim(),
         status: "open",
-      });
+      }).select("id,subject").single();
 
       if (error) {
         setStatus(error.message, "warn");
         return;
       }
+
+      await createNotification({
+        recipientId: currentUser.id,
+        title: "Support request submitted",
+        message: `${ticket.subject} is now in the ETX support queue.`,
+        category: "support",
+        entityTable: "support_tickets",
+        entityId: ticket.id,
+      });
 
       supportForm.reset();
       setStatus("Support ticket submitted. ETX admin will review it.", "ok");
@@ -419,6 +461,39 @@
         setStatus("Plan created.", "ok");
         await loadAdminData();
         await loadPlans();
+      });
+    }
+
+    if (adminPaymentMethodForm) {
+      adminPaymentMethodForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!requireAdminWrite()) return;
+
+        const form = new FormData(adminPaymentMethodForm);
+        const payload = {
+          method_key: String(form.get("method_key") || "gcash"),
+          name: String(form.get("name") || "").trim(),
+          type: String(form.get("type") || "manual"),
+          account_name: String(form.get("account_name") || "").trim() || null,
+          account_number: String(form.get("account_number") || "").trim() || null,
+          network: String(form.get("network") || "").trim() || null,
+          instructions: String(form.get("instructions") || "").trim() || null,
+          qr_image_url: String(form.get("qr_image_url") || "").trim() || null,
+          status: String(form.get("status") || "active"),
+          sort_order: Number(form.get("sort_order") || 100),
+          created_by: currentUser.id,
+        };
+
+        const { error } = await client.from("payment_methods").upsert(payload, { onConflict: "method_key" });
+        if (error) {
+          setStatus(error.message, "warn");
+          return;
+        }
+
+        adminPaymentMethodForm.reset();
+        setStatus("Payment method saved.", "ok");
+        await loadPaymentMethods();
+        await loadAdminData();
       });
     }
   }
@@ -516,16 +591,82 @@
     });
   }
 
+  async function loadPaymentMethods() {
+    if (!paymentMethodSelect && !adminPaymentMethodsList) return;
+
+    const query = client
+      .from("payment_methods")
+      .select("*")
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true });
+
+    const { data, error } = hasAdminAccess() ? await query : await query.eq("status", "active");
+
+    if (error) {
+      if (paymentMethodSelect) {
+        paymentMethodSelect.innerHTML = `<option value="">Payment methods unavailable</option>`;
+        paymentMethodSelect.disabled = true;
+      }
+      setStatus(error.message, "warn");
+      return;
+    }
+
+    paymentMethodsCache = data || [];
+    renderPaymentMethodOptions();
+  }
+
+  function bindPaymentMethodSelect() {
+    if (!paymentMethodSelect) return;
+    paymentMethodSelect.addEventListener("change", renderPaymentMethodDetails);
+  }
+
+  function renderPaymentMethodOptions() {
+    if (!paymentMethodSelect) return;
+
+    const activeMethods = paymentMethodsCache.filter((method) => method.status === "active");
+    paymentMethodSelect.disabled = activeMethods.length === 0;
+    paymentMethodSelect.innerHTML = activeMethods.length
+      ? activeMethods.map((method) => `<option value="${escapeHtml(method.method_key)}">${escapeHtml(method.name)}</option>`).join("")
+      : `<option value="">No active payment methods</option>`;
+
+    renderPaymentMethodDetails();
+  }
+
+  function renderPaymentMethodDetails() {
+    if (!paymentMethodDetails || !paymentMethodSelect) return;
+
+    const method = paymentMethodsCache.find((item) => item.method_key === paymentMethodSelect.value && item.status === "active");
+    if (!method) {
+      paymentMethodDetails.innerHTML = `<strong>No method selected</strong><span>Choose an active payment method before submitting proof.</span>`;
+      return;
+    }
+
+    const account = method.account_number ? method.account_number : "Admin will provide the final account details.";
+    const meta = [method.account_name, method.network].filter(Boolean).join(" / ");
+    const qr = method.qr_image_url
+      ? `<a href="${escapeHtml(method.qr_image_url)}" target="_blank" rel="noopener">Open QR / payment image</a>`
+      : "";
+
+    paymentMethodDetails.innerHTML = `
+      <strong>${escapeHtml(method.name)}</strong>
+      <span>${escapeHtml(meta || method.type)}</span>
+      <span>${escapeHtml(account)}</span>
+      <small>${escapeHtml(method.instructions || "Send exact amount, then upload proof for verification.")}</small>
+      ${qr}
+    `;
+  }
+
   async function hydrateClientData() {
     if (!currentUser) return;
 
-    const [orders, payments, subscriptions, referrals, commissionRequests, supportTickets] = await Promise.all([
+    const [orders, payments, subscriptions, referrals, commissionRequests, supportTickets, notifications] = await Promise.all([
       client.from("orders").select("id,status,total_amount,currency,created_at,plans(name,products(name))").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
-      client.from("payments").select("id,status,amount,currency,transaction_reference,created_at,orders(plans(name,products(name)))").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
+      client.from("payments").select("id,status,amount,currency,method,transaction_reference,created_at,payment_methods(name,network),orders(plans(name,products(name)))").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("subscriptions").select("status,expires_at,products(name),plans(name)").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("referrals").select("commission_amount,commission_status").eq("referrer_id", currentUser.id),
       client.from("commission_requests").select("amount,status,payout_method,created_at").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("support_tickets").select("id,subject,message,status,created_at,updated_at").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
+      client.from("notifications").select("*").eq("recipient_id", currentUser.id).neq("status", "archived").order("created_at", { ascending: false }).limit(8),
     ]);
 
     renderList("[data-orders-list]", orders.data, renderOrderRow, "No orders yet.");
@@ -533,7 +674,7 @@
     renderList("[data-subscriptions-list]", subscriptions.data, renderSubscriptionRow, "No subscriptions yet.");
     renderList("[data-support-tickets-list]", supportTickets.data, renderSupportTicketRow, "No support tickets yet.");
 
-    syncClientFlowState(orders.data || [], payments.data || [], subscriptions.data || [], supportTickets.data || []);
+    syncClientFlowState(orders.data || [], payments.data || [], subscriptions.data || [], supportTickets.data || [], notifications.data || []);
 
     const referralRows = referrals.data || [];
     availableCommission = referralRows
@@ -638,12 +779,13 @@
 
     const roleRequest = hasSuperUserAccess() ? client.from("admin_roles").select("*").order("sort_order", { ascending: true }) : Promise.resolve({ data: [], error: null });
 
-    const [products, plans, payments, referrals, commissionRequests, supportTickets, subscriptions, orders, profiles, roles] = await Promise.all([
+    const [products, plans, paymentMethods, payments, referrals, commissionRequests, supportTickets, subscriptions, orders, profiles, notifications, roles] = await Promise.all([
       client.from("products").select("*").order("sort_order", { ascending: true }),
       client.from("plans").select("*,products(name,code)").order("created_at", { ascending: false }),
+      client.from("payment_methods").select("*").order("sort_order", { ascending: true }),
       client
         .from("payments")
-        .select("*,orders(id,status,total_amount,currency,plan_id,plans(name,duration_days,bonus_days,product_id,products(name))),profiles!payments_client_id_fkey(full_name,email,telegram_username)")
+        .select("*,payment_methods(name,network),orders(id,status,total_amount,currency,plan_id,plans(name,duration_days,bonus_days,product_id,products(name))),profiles!payments_client_id_fkey(full_name,email,telegram_username)")
         .order("created_at", { ascending: false })
         .limit(30),
       client
@@ -677,16 +819,22 @@
         .eq("role", "client")
         .order("created_at", { ascending: false })
         .limit(100),
+      client
+        .from("notifications")
+        .select("*,recipient:profiles!notifications_recipient_id_fkey(full_name,email)")
+        .order("created_at", { ascending: false })
+        .limit(20),
       roleRequest,
     ]);
 
-    if (products.error || plans.error || payments.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error || profiles.error || roles.error) {
-      setStatus(products.error?.message || plans.error?.message || payments.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message || profiles.error?.message || roles.error?.message, "warn");
+    if (products.error || plans.error || paymentMethods.error || payments.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error || profiles.error || notifications.error || roles.error) {
+      setStatus(products.error?.message || plans.error?.message || paymentMethods.error?.message || payments.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message || profiles.error?.message || notifications.error?.message || roles.error?.message, "warn");
       return;
     }
 
     renderListElement(adminProductsList, products.data, renderAdminProductRow, "No products yet.");
     renderListElement(adminPlansList, plans.data, renderAdminPlanRow, "No plans yet.");
+    renderListElement(adminPaymentMethodsList, paymentMethods.data, renderAdminPaymentMethodRow, "No payment methods yet.");
     renderListElement(adminPaymentQueue, payments.data, renderPaymentReviewCard, "No payments in queue.");
     renderListElement(adminReferralList, referrals.data, renderAdminReferralRow, "No referral records yet.");
     renderListElement(adminCommissionQueue, commissionRequests.data, renderCommissionReviewCard, "No withdrawal requests yet.");
@@ -694,14 +842,17 @@
     renderListElement(adminClientsList, buildClientRows(profiles.data || [], subscriptions.data || [], payments.data || []), renderMetricRow, "No client accounts yet.");
     renderListElement(adminSubscriptionsList, subscriptions.data, renderAdminSubscriptionRow, "No subscriptions yet.");
     renderListElement(adminExpiringList, buildExpiringRows(subscriptions.data || []), renderMetricRow, "No renewals due yet.");
+    renderListElement(adminNotificationsList, notifications.data, renderAdminNotificationRow, "No notifications yet.");
     renderListElement(adminRolesList, roles.data, renderAdminRoleRow, "No custom roles yet.");
     hydrateAdminProductOptions(products.data || []);
     bindAdminPaymentActions();
+    bindAdminPaymentMethodActions();
     bindAdminCommissionActions();
     bindAdminSupportActions();
     adminReportSnapshot = {
       products: products.data || [],
       plans: plans.data || [],
+      paymentMethods: paymentMethods.data || [],
       payments: payments.data || [],
       referrals: referrals.data || [],
       commissionRequests: commissionRequests.data || [],
@@ -709,9 +860,12 @@
       subscriptions: subscriptions.data || [],
       orders: orders.data || [],
       profiles: profiles.data || [],
+      notifications: notifications.data || [],
       roles: roles.data || [],
     };
     renderAdminReports(adminReportSnapshot);
+    paymentMethodsCache = paymentMethods.data || [];
+    renderPaymentMethodOptions();
   }
 
   function bindAdminPaymentActions() {
@@ -742,6 +896,15 @@
         }
 
         await rejectPayment(paymentId);
+      });
+    });
+  }
+
+  function bindAdminPaymentMethodActions() {
+    document.querySelectorAll("[data-admin-method-status]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        if (!requireAdminWrite()) return;
+        await updateRecordStatus("payment_methods", button.dataset.methodId, button.dataset.adminMethodStatus);
       });
     });
   }
@@ -939,6 +1102,14 @@
     }
 
     await logAdminAction(`commission.${status}`, "commission_requests", requestId);
+    await createNotification({
+      recipientId: request.client_id,
+      title: status === "approved" ? "Withdrawal approved" : "Withdrawal rejected",
+      message: status === "approved" ? "Your referral withdrawal request has been approved." : "Your referral withdrawal request was rejected. Please review your payout details.",
+      category: "commission",
+      entityTable: "commission_requests",
+      entityId: requestId,
+    });
     setStatus(`Commission withdrawal ${status}.`, status === "approved" ? "ok" : "warn");
     await loadAdminData();
   }
@@ -953,13 +1124,15 @@
   }
 
   async function updateSupportTicket(ticketId, status) {
-    const { error } = await client
+    const { data: ticket, error } = await client
       .from("support_tickets")
       .update({
         status,
         assigned_to: currentUser.id,
       })
-      .eq("id", ticketId);
+      .eq("id", ticketId)
+      .select("client_id,subject")
+      .single();
 
     if (error) {
       setStatus(error.message, "warn");
@@ -967,6 +1140,14 @@
     }
 
     await logAdminAction(`support.${status}`, "support_tickets", ticketId);
+    await createNotification({
+      recipientId: ticket.client_id,
+      title: "Support ticket updated",
+      message: `${ticket.subject} is now ${formatStatus(status)}.`,
+      category: "support",
+      entityTable: "support_tickets",
+      entityId: ticketId,
+    });
     setStatus(`Support ticket marked as ${formatStatus(status)}.`, status === "resolved" ? "ok" : "warn");
     await loadAdminData();
   }
@@ -1029,6 +1210,14 @@
     }
 
     await logAdminAction("payment.approved", "payments", payment.id);
+    await createNotification({
+      recipientId: payment.client_id,
+      title: "Congratulations, subscription active",
+      message: "Your payment is verified and your ETX subscription is now active.",
+      category: "subscription",
+      entityTable: "payments",
+      entityId: payment.id,
+    });
     setStatus("Payment approved and subscription activated.", "ok");
     await loadAdminData();
   }
@@ -1062,7 +1251,7 @@
   }
 
   async function rejectPayment(paymentId) {
-    const { data: payment, error: readError } = await client.from("payments").select("order_id").eq("id", paymentId).single();
+    const { data: payment, error: readError } = await client.from("payments").select("order_id,client_id").eq("id", paymentId).single();
     if (readError) {
       setStatus(readError.message, "warn");
       return;
@@ -1086,6 +1275,14 @@
     }
 
     await logAdminAction("payment.rejected", "payments", paymentId);
+    await createNotification({
+      recipientId: payment.client_id,
+      title: "Payment needs correction",
+      message: "Your payment proof was rejected. Please submit corrected payment details or proof.",
+      category: "payment",
+      entityTable: "payments",
+      entityId: paymentId,
+    });
     setStatus("Payment rejected.", "ok");
     await loadAdminData();
   }
@@ -1112,6 +1309,22 @@
       entity_table: entityTable,
       entity_id: entityId,
     });
+  }
+
+  async function createNotification({ recipientId, title, message, category = "system", entityTable = null, entityId = null }) {
+    if (!recipientId || !title || !message) return null;
+
+    const { error } = await client.from("notifications").insert({
+      recipient_id: recipientId,
+      actor_id: currentUser?.id || null,
+      title,
+      message,
+      category,
+      entity_table: entityTable,
+      entity_id: entityId,
+    });
+
+    return error || null;
   }
 
   function requireAdmin(showMessage = true) {
@@ -1208,7 +1421,7 @@
     return `<div class="row"><span>${escapeHtml(ticket.subject)} <small>${escapeHtml(date)}</small></span><b class="${statusClass(ticket.status)}">${escapeHtml(formatStatus(ticket.status))}</b></div>`;
   }
 
-  function syncClientFlowState(orders, payments, subscriptions, supportTickets = []) {
+  function syncClientFlowState(orders, payments, subscriptions, supportTickets = [], notifications = []) {
     const latestPayment = payments[0];
     const hasPendingPayment = payments.some((payment) => ["pending", "under_review"].includes(payment.status));
     const hasActiveSubscription = subscriptions.some((subscription) => ["active", "trial"].includes(subscription.status));
@@ -1232,11 +1445,24 @@
     }
 
     lastClientSnapshot = { hasPendingPayment, hasActiveSubscription };
-    renderClientNotifications(orders, payments, subscriptions, supportTickets);
+    renderClientNotifications(notifications, orders, payments, subscriptions, supportTickets);
   }
 
-  function renderClientNotifications(orders, payments, subscriptions, supportTickets) {
+  function renderClientNotifications(savedNotifications, orders, payments, subscriptions, supportTickets) {
     if (!clientNotifications) return;
+
+    if (savedNotifications?.length) {
+      clientNotifications.innerHTML = savedNotifications
+        .map((notification) => `
+          <div class="notice-row ${notification.status === "unread" ? "warn" : "ok"}">
+            <strong>${escapeHtml(notification.title)}</strong>
+            <span>${escapeHtml(notification.message)}</span>
+            <small>${escapeHtml(formatDateTime(notification.created_at))}</small>
+          </div>
+        `)
+        .join("");
+      return;
+    }
 
     const latestPayment = payments[0];
     const activeSubscription = subscriptions.find((subscription) => ["active", "trial"].includes(subscription.status));
@@ -1388,10 +1614,33 @@
     `;
   }
 
+  function renderAdminPaymentMethodRow(method) {
+    const nextStatus = method.status === "active" ? "hidden" : "active";
+    const actionButton = hasAdminWriteAccess()
+      ? `<button class="secondary-btn" type="button" data-admin-method-status="${escapeHtml(nextStatus)}" data-method-id="${escapeHtml(method.id)}">${escapeHtml(nextStatus)}</button>`
+      : `<span class="warn">View only</span>`;
+    const account = [method.account_name, method.account_number].filter(Boolean).join(" / ") || "No account details";
+    const network = method.network ? ` / ${method.network}` : "";
+
+    return `
+      <div class="approval-card">
+        <div>
+          <strong>${escapeHtml(method.name)}</strong>
+          <p>${escapeHtml(account)}${escapeHtml(network)}</p>
+          <p>${escapeHtml(method.instructions || "No instructions yet.")}</p>
+        </div>
+        <span class="${method.status === "active" ? "ok" : "warn"}">${escapeHtml(method.status)}</span>
+        <b>${escapeHtml(method.method_key)}</b>
+        ${actionButton}
+      </div>
+    `;
+  }
+
   function renderPaymentReviewCard(payment) {
     const clientName = payment.profiles?.full_name || payment.profiles?.email || "Client";
     const plan = payment.orders?.plans;
     const productName = plan?.products?.name || "ETX Product";
+    const methodName = payment.payment_methods?.name || formatStatus(payment.method || "payment");
     const proofButton = payment.proof_path
       ? `<button class="secondary-btn" type="button" data-proof-path="${escapeHtml(payment.proof_path)}" data-payment-id="${escapeHtml(payment.id)}">View Proof</button>`
       : `<span class="warn">No file</span>`;
@@ -1407,6 +1656,7 @@
         <div>
           <strong>${escapeHtml(clientName)}</strong>
           <p>${escapeHtml(productName)} / ${escapeHtml(plan?.name || "Plan")} / ${escapeHtml(formatMoney(Number(payment.amount), payment.currency))}</p>
+          <p>Method: ${escapeHtml(methodName)}</p>
           <p>Ref: ${escapeHtml(payment.transaction_reference || "No reference")}</p>
         </div>
         <span class="${payment.status === "approved" ? "ok" : payment.status === "rejected" ? "rejected" : "warn"}">${escapeHtml(payment.status)}</span>
@@ -1494,6 +1744,16 @@
     `;
   }
 
+  function renderAdminNotificationRow(notification) {
+    const recipient = notification.recipient?.full_name || notification.recipient?.email || "Client";
+    return `
+      <div class="notice-row ${notification.status === "unread" ? "warn" : "ok"}">
+        <strong>${escapeHtml(notification.title)} <small>${escapeHtml(recipient)}</small></strong>
+        <span>${escapeHtml(notification.message)}</span>
+      </div>
+    `;
+  }
+
   function hydrateAdminProductOptions(products) {
     if (!adminPlanProductSelect) return;
     adminPlanProductSelect.innerHTML = products
@@ -1542,6 +1802,10 @@
 
   function formatDate(value) {
     return value ? new Date(value).toLocaleDateString() : "No expiry";
+  }
+
+  function formatDateTime(value) {
+    return value ? new Date(value).toLocaleString() : "Just now";
   }
 
   function daysUntil(value) {

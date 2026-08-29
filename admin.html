@@ -71,6 +71,7 @@
         <button class="active" data-tab="admin-overview">Overview</button>
         <button data-tab="admin-products" data-admin-write-only>Products</button>
         <button data-tab="admin-plans" data-admin-write-only>Plans & Pricing</button>
+        <button data-tab="admin-methods">Payment Methods</button>
         <button data-tab="admin-payments">Payment Queue</button>
         <button data-tab="admin-clients">Clients</button>
         <button data-tab="admin-subscriptions">Subscriptions</button>
@@ -114,7 +115,14 @@
               <h3>Quick Actions</h3>
               <button class="danger-btn wide" type="button" data-jump="admin-payments">Review Payments</button>
               <button class="secondary-btn wide" type="button" data-jump="admin-products" data-admin-write-only>Create Product</button>
+              <button class="secondary-btn wide" type="button" data-jump="admin-methods" data-admin-write-only>Update Payment Methods</button>
               <button class="secondary-btn wide" type="button" data-jump="admin-reports">View Reports</button>
+            </article>
+            <article class="panel">
+              <h3>Notification Center</h3>
+              <div data-admin-notifications-list>
+                <p class="codebox">Notifications load after sign in.</p>
+              </div>
             </article>
           </div>
         </div>
@@ -167,6 +175,35 @@
               <p class="codebox">Sign in as admin to load plans.</p>
             </div>
           </article>
+        </div>
+
+        <div class="portal-tab" id="admin-methods">
+          <div class="content-grid">
+            <article class="panel form-panel" data-admin-write-only>
+              <h3>Create Payment Method</h3>
+              <form data-admin-payment-method-form>
+                <div class="form-grid">
+                  <label>Method Key<select name="method_key" required><option value="gcash">GCash</option><option value="bpi">BPI</option><option value="usdt_bep20">USDT BEP20</option><option value="usdt_trc20">USDT TRC20</option><option value="crypto_other">Crypto Other</option></select></label>
+                  <label>Name<input type="text" name="name" placeholder="GCash Payment" required /></label>
+                  <label>Type<select name="type"><option value="ewallet">E-Wallet</option><option value="bank">Bank</option><option value="crypto">Crypto</option><option value="manual">Manual</option></select></label>
+                  <label>Status<select name="status"><option value="active">Active</option><option value="draft">Draft</option><option value="hidden">Hidden</option></select></label>
+                  <label>Account Name<input type="text" name="account_name" placeholder="ETX Finance" /></label>
+                  <label>Account Number / Address<input type="text" name="account_number" placeholder="Account number or wallet address" /></label>
+                  <label>Network<input type="text" name="network" placeholder="BSC, TRC20, bank branch" /></label>
+                  <label>Sort Order<input type="number" name="sort_order" value="100" min="0" /></label>
+                </div>
+                <label>Instructions<textarea name="instructions" placeholder="Client payment instructions, reminders, and proof requirements."></textarea></label>
+                <label>QR / Image URL<input type="url" name="qr_image_url" placeholder="https://..." /></label>
+                <button class="primary-btn" type="submit">Save Payment Method</button>
+              </form>
+            </article>
+            <article class="panel">
+              <h3>Active Payment Directory</h3>
+              <div data-admin-payment-methods-list>
+                <p class="codebox">Sign in as admin to load payment methods.</p>
+              </div>
+            </article>
+          </div>
         </div>
 
         <div class="portal-tab" id="admin-payments">

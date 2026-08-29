@@ -167,13 +167,14 @@
               <div class="form-grid">
                 <label>
                   Payment Method
-                  <select name="method">
-                    <option value="gcash">GCash</option>
-                    <option value="bpi">BPI Bank Transfer</option>
-                    <option value="usdt_bep20">USDT BEP20 / BSC</option>
-                    <option value="usdt_trc20">USDT TRC20</option>
+                  <select name="method" data-payment-method-select required>
+                    <option value="">Loading active payment methods...</option>
                   </select>
                 </label>
+                <div class="method-details" data-payment-method-details>
+                  <strong>Select payment method</strong>
+                  <span>Admin-managed payment instructions will appear here.</span>
+                </div>
                 <label>
                   Transaction Reference
                   <input type="text" name="transaction_reference" placeholder="Reference number or TX hash" required />
