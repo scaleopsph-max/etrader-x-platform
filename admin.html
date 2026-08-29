@@ -72,7 +72,7 @@
         <button data-tab="admin-products" data-admin-write-only>Products</button>
         <button data-tab="admin-plans" data-admin-write-only>Plans & Pricing</button>
         <button data-tab="admin-methods">Payment Methods</button>
-        <button data-tab="admin-payments">Payment Queue</button>
+        <button data-tab="admin-payments">Deposit Queue</button>
         <button data-tab="admin-clients">Clients</button>
         <button data-tab="admin-subscriptions">Subscriptions</button>
         <button data-tab="admin-referrals">Referrals</button>
@@ -98,7 +98,7 @@
             <p>Review priority work, revenue status, and live access health.</p>
           </div>
           <div class="stat-grid">
-            <article><span>Pending Payments</span><strong data-report-pending-payments>0</strong><small>Needs review</small></article>
+            <article><span>Pending Deposits</span><strong data-report-pending-payments>0</strong><small>Needs review</small></article>
             <article><span>Active Subscriptions</span><strong data-report-active-subscriptions>0</strong><small>Live access records</small></article>
             <article><span>Approved Revenue</span><strong data-report-approved-revenue>$0.00</strong><small>Verified payments</small></article>
           </div>
@@ -111,7 +111,7 @@
             </article>
             <article class="panel">
               <h3>Quick Actions</h3>
-              <button class="danger-btn wide" type="button" data-jump="admin-payments">Review Payments</button>
+              <button class="danger-btn wide" type="button" data-jump="admin-payments">Review Deposits</button>
               <button class="secondary-btn wide" type="button" data-jump="admin-products" data-admin-write-only>Create Product</button>
               <button class="secondary-btn wide" type="button" data-jump="admin-methods" data-admin-write-only>Update Payment Methods</button>
               <button class="secondary-btn wide" type="button" data-jump="admin-reports">View Reports</button>
@@ -226,15 +226,15 @@
           <div class="page-heading">
             <p class="eyebrow danger-text">Payment queue</p>
             <h2>Payment verification</h2>
-            <p>Review submitted proofs, approve valid payments, or request correction.</p>
+            <p>Review wallet top-up proofs, approve valid deposits, or request correction.</p>
           </div>
           <article class="panel">
-            <h3>Payment Approval Queue</h3>
+            <h3>Deposit Approval Queue</h3>
             <label class="review-note-control">Review Notes<textarea id="admin-review-notes" placeholder="Optional note for approval or rejection. This will be included in the client notification."></textarea></label>
             <div data-admin-payment-queue>
-              <p class="codebox">Sign in as admin to load payment queue.</p>
+              <p class="codebox">Sign in as admin to load deposit queue.</p>
             </div>
-            <p class="codebox" id="admin-action-log">No payment action selected yet.</p>
+            <p class="codebox" id="admin-action-log">No deposit action selected yet.</p>
           </article>
         </div>
 
@@ -253,8 +253,8 @@
             </article>
             <article class="panel">
               <h3>Client Creation</h3>
-              <p class="codebox">For security, clients create their own account through the client portal. Admins manage access after payment verification.</p>
-              <button class="secondary-btn wide" type="button" data-jump="admin-payments">Review Payment Queue</button>
+              <p class="codebox">For security, clients create their own account through the client portal. Admins verify deposits before wallet balance is credited.</p>
+              <button class="secondary-btn wide" type="button" data-jump="admin-payments">Review Deposit Queue</button>
             </article>
           </div>
         </div>
@@ -319,11 +319,11 @@
           <div class="page-heading">
             <p class="eyebrow danger-text">Reports</p>
             <h2>Operations reports</h2>
-            <p>Export sales, payment queue, and commission data for review.</p>
+            <p>Export sales, deposit queue, and commission data for review.</p>
           </div>
           <div class="stat-grid">
-            <article><span>Payments Today</span><strong data-report-payments-today>0</strong><small>Submitted today</small></article>
-            <article><span>Pending Revenue</span><strong data-report-pending-revenue>$0.00</strong><small>Awaiting review</small></article>
+            <article><span>Wallet Sales Today</span><strong data-report-payments-today>0</strong><small>Purchased today</small></article>
+            <article><span>Pending Deposits</span><strong data-report-pending-revenue>$0.00</strong><small>Awaiting review</small></article>
             <article><span>Renewals Due</span><strong data-report-renewals-due>0</strong><small>Next 7 days</small></article>
           </div>
           <div class="content-grid">
@@ -343,7 +343,7 @@
           <article class="panel">
             <h3>Report Exports</h3>
             <div class="row"><span>Sales summary</span><button class="secondary-btn" type="button" data-report-export="sales">Export CSV</button></div>
-            <div class="row"><span>Payment queue</span><button class="secondary-btn" type="button" data-report-export="payments">Export CSV</button></div>
+            <div class="row"><span>Deposit queue</span><button class="secondary-btn" type="button" data-report-export="payments">Export CSV</button></div>
             <div class="row"><span>Commission ledger</span><button class="secondary-btn" type="button" data-report-export="commissions">Export CSV</button></div>
           </article>
         </div>

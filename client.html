@@ -32,7 +32,7 @@
           <p class="eyebrow">Client access</p>
           <h1>ETrader-X client access.</h1>
           <p class="hero-lead">
-            Sign in to manage your subscriptions, payment verification, referrals,
+            Sign in to manage your wallet balance, subscriptions, referrals,
             and support requests in one secure portal.
           </p>
           <p class="codebox warn" data-auth-status>Checking session...</p>
@@ -72,7 +72,7 @@
         <button class="active" data-tab="overview">Overview</button>
         <button data-tab="profile">Profile</button>
         <button data-tab="buy">Subscribe / Buy</button>
-        <button data-tab="payments">Payments</button>
+        <button data-tab="payments">Wallet / Deposit</button>
         <button data-tab="subscriptions">Subscriptions</button>
         <button data-tab="referrals">Referral</button>
         <button data-tab="support">Support <span class="nav-badge hidden" data-notification-badge>0</span></button>
@@ -88,19 +88,19 @@
           <div class="page-heading">
             <p class="eyebrow">Client overview</p>
             <h2>Account dashboard</h2>
-            <p>Track your subscription request, verification status, referrals, and next actions.</p>
+            <p>Track wallet balance, deposit verification, subscriptions, referrals, and next actions.</p>
           </div>
           <p class="codebox ok" data-auth-status>Client portal ready.</p>
           <div class="flow-tracker" aria-label="Subscription process">
             <span class="active" data-flow-step="select">1. Select Plan</span>
-            <span data-flow-step="payment">2. Submit Payment</span>
+            <span data-flow-step="payment">2. Deposit Funds</span>
             <span data-flow-step="verification">3. Admin Verification</span>
             <span data-flow-step="subscription">4. Subscription Active</span>
           </div>
           <p class="codebox" data-client-flow-alert>Select a plan to start your subscription request.</p>
           <div class="stat-grid">
             <article><span>Client Session</span><strong>Active</strong><small class="account-email" data-auth-email>Not signed in</small></article>
-            <article><span>Payment Status</span><strong>Review</strong><small>Submitted proof goes to admin queue</small></article>
+            <article><span>Wallet Balance</span><strong data-wallet-balance>$0.00</strong><small>Approved deposits only</small></article>
             <article><span>Referral Balance</span><strong data-commission-total>$0.00</strong><small>Calculated from approved referrals</small></article>
           </div>
           <div class="content-grid">
@@ -108,7 +108,7 @@
               <h3>Next Action</h3>
               <div data-client-next-actions>
                 <div class="row"><span>Choose a plan</span><b class="warn">Required</b></div>
-                <div class="row"><span>Submit payment proof</span><b class="warn">Waiting</b></div>
+                <div class="row"><span>Deposit funds</span><b class="warn">Waiting</b></div>
                 <div class="row"><span>Admin verification</span><b>Not started</b></div>
               </div>
             </article>
@@ -153,7 +153,7 @@
           <div class="page-heading">
             <p class="eyebrow">Subscribe</p>
             <h2>Choose your ETX plan</h2>
-            <p>Select a package first. Your payment form will follow the selected plan.</p>
+            <p>Select a package and buy using approved wallet balance.</p>
           </div>
           <div class="buy-grid" data-dynamic-plans>
             <article class="panel"><h3>Loading plans...</h3><p>Fetching ETX products from Supabase.</p></article>
@@ -161,19 +161,23 @@
           <article class="panel order-panel">
             <h3>Selected Order</h3>
             <p class="codebox" id="selected-plan">No selected product yet.</p>
-            <button class="danger-btn" type="button" data-jump="payments">Proceed to Payment</button>
+            <div class="mini-form">
+              <label>Referral Code<input type="text" data-wallet-referral-code placeholder="Optional" /></label>
+              <button class="danger-btn" type="button" data-wallet-purchase>Buy With Wallet Balance</button>
+              <button class="secondary-btn" type="button" data-jump="payments">Deposit Funds</button>
+            </div>
           </article>
         </div>
 
         <div class="portal-tab" id="payments">
           <div class="page-heading">
-            <p class="eyebrow">Payments</p>
-            <h2>Submit payment proof</h2>
-            <p>Use the active payment details below and upload your receipt or transaction proof.</p>
+            <p class="eyebrow">Wallet</p>
+            <h2>Deposit funds</h2>
+            <p>Top up your wallet first. Products can only be purchased using approved wallet balance.</p>
           </div>
           <article class="panel form-panel">
-            <h3>Submit Payment Proof</h3>
-            <p class="codebox" data-payment-context>No selected plan yet. Select a plan first.</p>
+            <h3>Deposit Request</h3>
+            <p class="codebox" data-payment-context>Deposit funds before buying ETX products.</p>
             <form data-payment-form>
               <div class="form-grid">
                 <label>
@@ -187,7 +191,7 @@
                   <span>Admin-managed payment instructions will appear here.</span>
                 </div>
                 <label>
-                  Transaction Reference
+                  Deposit Reference
                   <input type="text" name="transaction_reference" placeholder="Reference number or TX hash" required />
                 </label>
                 <label>
@@ -195,17 +199,25 @@
                   <input type="number" name="amount" min="0" step="0.01" placeholder="300" required />
                 </label>
                 <label>
-                  Referral Code
-                  <input type="text" name="referral_code" placeholder="Optional" />
-                </label>
-                <label>
-                  Upload Proof
+                  Upload Deposit Proof
                   <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" data-proof-input />
                 </label>
               </div>
               <p class="proof-note" data-proof-note>Accepted: JPG, PNG, WEBP, or PDF up to 8 MB.</p>
-              <button class="primary-btn" type="submit">Submit For Admin Review</button>
+              <button class="primary-btn" type="submit">Submit Deposit For Review</button>
             </form>
+          </article>
+          <article class="panel order-panel">
+            <h3>Wallet Activity</h3>
+            <div data-wallet-transactions-list>
+              <p class="codebox">Wallet activity will appear here.</p>
+            </div>
+          </article>
+          <article class="panel order-panel">
+            <h3>Deposit Requests</h3>
+            <div data-deposit-requests-list>
+              <p class="codebox">Submitted deposits will appear here.</p>
+            </div>
           </article>
         </div>
 
@@ -213,12 +225,12 @@
           <div class="page-heading">
             <p class="eyebrow">Subscriptions</p>
             <h2>Access status</h2>
-            <p>Review approved subscriptions, pending payments, and renewal timing.</p>
+            <p>Review active subscriptions, wallet purchases, and renewal timing.</p>
           </div>
           <div class="stat-grid">
             <article><span>Subscription Status</span><strong data-subscription-state>Pending</strong><small data-subscription-detail>No active subscription yet</small></article>
             <article><span>Renewal Window</span><strong data-renewal-days>--</strong><small>Days remaining</small></article>
-            <article><span>Latest Payment</span><strong data-latest-payment-state>None</strong><small>Admin verification status</small></article>
+            <article><span>Latest Purchase</span><strong data-latest-payment-state>None</strong><small>Wallet purchase status</small></article>
           </div>
           <article class="panel">
             <h3>My Subscriptions</h3>
@@ -233,9 +245,9 @@
             </div>
           </article>
           <article class="panel order-panel">
-            <h3>Payment Verification</h3>
+            <h3>Wallet Purchases</h3>
             <div data-payments-list>
-              <p class="codebox">Submitted payments will appear here.</p>
+              <p class="codebox">Wallet purchases will appear here.</p>
             </div>
           </article>
         </div>
@@ -278,7 +290,7 @@
           <article class="panel ai-chat-panel">
             <h3>AI FAQ Assistant</h3>
             <div class="ai-chat-messages" data-ai-chat-messages>
-              <div class="ai-message bot">Hi. Ask about subscriptions, payments, referrals, verification, or support.</div>
+              <div class="ai-message bot">Hi. Ask about wallet deposits, subscriptions, referrals, verification, or support.</div>
             </div>
             <form class="ai-chat-form" data-ai-chat-form>
               <input type="text" name="message" placeholder="Ask ETX FAQ..." autocomplete="off" required />

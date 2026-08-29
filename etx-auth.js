@@ -50,6 +50,10 @@
   const clientFlowAlert = document.querySelector("[data-client-flow-alert]");
   const paymentContext = document.querySelector("[data-payment-context]");
   const clientNextActions = document.querySelector("[data-client-next-actions]");
+  const walletPurchaseButton = document.querySelector("[data-wallet-purchase]");
+  const walletReferralCode = document.querySelector("[data-wallet-referral-code]");
+  const walletTransactionsList = document.querySelector("[data-wallet-transactions-list]");
+  const depositRequestsList = document.querySelector("[data-deposit-requests-list]");
   const commissionForm = document.querySelector("[data-commission-form]");
   const supportForm = document.querySelector("[data-support-form]");
   const supportThread = document.querySelector("[data-support-thread]");
@@ -79,9 +83,9 @@
   let currentPlan = null;
   let paymentMethodsCache = [];
   let availableCommission = 0;
+  let walletBalance = 0;
   let adminReportSnapshot = null;
   let supportTicketsCache = [];
-  let latestRejectedPaymentId = null;
   const referredByCode = getReferralCode();
   let lastClientSnapshot = {
     hasPendingPayment: false,
@@ -95,6 +99,7 @@
     bindAuthModeToggle();
     bindProfileForm();
     bindPaymentForm();
+    bindWalletPurchase();
     bindProofInput();
     bindPaymentMethodSelect();
     bindNotificationActions();
@@ -240,19 +245,14 @@
       event.preventDefault();
 
       if (!currentUser) {
-        setStatus("Please sign in before submitting payment proof.", "warn");
-        return;
-      }
-
-      if (!currentPlan) {
-        setStatus("Select a product plan first.", "warn");
+        setStatus("Please sign in before submitting a deposit.", "warn");
         return;
       }
 
       const form = new FormData(paymentForm);
       const selectedMethod = paymentMethodsCache.find((method) => method.method_key === String(form.get("method") || ""));
       if (!selectedMethod) {
-        setStatus("Select an active payment method first.", "warn");
+        setStatus("Select an active deposit method first.", "warn");
         return;
       }
 
@@ -273,61 +273,92 @@
         return;
       }
 
-      const { data: order, error: orderError } = await client
-        .from("orders")
-        .insert({
-          client_id: currentUser.id,
-          plan_id: currentPlan.id,
-          total_amount: currentPlan.price_amount,
-          currency: currentPlan.currency,
-          referral_code_used: String(form.get("referral_code") || referredByCode || "").trim().toUpperCase() || null,
-          notes: latestRejectedPaymentId
-            ? `Client resubmitted payment proof for ${currentPlan.product_name} / ${currentPlan.name}`
-            : `Client selected ${currentPlan.product_name} / ${currentPlan.name}`,
-        })
-        .select()
-        .single();
-
-      if (orderError) {
-        setStatus(orderError.message, "warn");
+      const amount = Number(form.get("amount") || 0);
+      if (!amount || amount <= 0) {
+        setStatus("Deposit amount must be greater than zero.", "warn");
         return;
       }
 
-      const { data: payment, error: paymentError } = await client.from("payments").insert({
-        order_id: order.id,
+      const { data: deposit, error: depositError } = await client.from("deposit_requests").insert({
         client_id: currentUser.id,
         method: selectedMethod.method_key,
         payment_method_id: selectedMethod.id,
-        status: "under_review",
-        amount: Number(form.get("amount") || currentPlan.price_amount),
-        currency: currentPlan.currency,
+        amount,
+        currency: "USD",
         transaction_reference: String(form.get("transaction_reference") || "").trim(),
         proof_path: proofPath,
         proof_file_name: file.name,
         proof_file_size: file.size,
         proof_file_type: file.type,
-        resubmitted_from: latestRejectedPaymentId,
       }).select("id").single();
 
-      if (paymentError) {
-        setStatus(paymentError.message, "warn");
+      if (depositError) {
+        setStatus(depositError.message, "warn");
         return;
       }
 
       await createNotification({
         recipientId: currentUser.id,
-        title: "Payment submitted",
-        message: `${selectedMethod.name} proof received. Please wait for admin verification.`,
+        title: "Deposit submitted",
+        message: `${selectedMethod.name} top-up proof received. Please wait for admin verification.`,
         category: "payment",
-        entityTable: "payments",
-        entityId: payment.id,
+        entityTable: "deposit_requests",
+        entityId: deposit.id,
       });
 
       paymentForm.reset();
       setProofNote("Accepted: JPG, PNG, WEBP, or PDF up to 8 MB.", "");
       renderPaymentMethodOptions();
-      setStatus("Payment submitted for admin review.", "ok");
-      setClientFlow("verification", "Payment received. Please wait while admin verifies your payment proof.");
+      setStatus("Deposit submitted for admin review.", "ok");
+      setClientFlow("verification", "Deposit received. Please wait while admin verifies your top-up proof.");
+      goToTab("payments");
+      await hydrateClientData();
+    });
+  }
+
+  function bindWalletPurchase() {
+    if (!walletPurchaseButton) return;
+
+    walletPurchaseButton.addEventListener("click", async () => {
+      if (!currentUser) {
+        setStatus("Please sign in before buying a plan.", "warn");
+        return;
+      }
+
+      if (!currentPlan) {
+        setStatus("Select a product plan first.", "warn");
+        return;
+      }
+
+      if (walletBalance < currentPlan.price_amount) {
+        setStatus("Insufficient wallet balance. Deposit funds first and wait for admin approval.", "warn");
+        setClientFlow("payment", "Deposit funds first. Products can only be purchased using approved wallet balance.");
+        goToTab("payments");
+        return;
+      }
+
+      const { data, error } = await client.rpc("purchase_plan_with_wallet", {
+        target_plan_id: currentPlan.id,
+        referral_code: String(walletReferralCode?.value || referredByCode || "").trim().toUpperCase() || null,
+      });
+
+      if (error) {
+        setStatus(error.message, "warn");
+        return;
+      }
+
+      walletBalance = Number(data?.wallet_balance || 0);
+      await createNotification({
+        recipientId: currentUser.id,
+        title: "Subscription activated",
+        message: `${currentPlan.product_name} / ${currentPlan.name} was purchased using your wallet balance.`,
+        category: "subscription",
+        entityTable: "subscriptions",
+        entityId: data?.subscription_id || null,
+      });
+
+      setStatus("Plan purchased using wallet balance. Subscription is active.", "ok");
+      setClientFlow("subscription", "Congratulations. Your subscription is now active and reflected in your account.");
       goToTab("subscriptions");
       await hydrateClientData();
     });
@@ -473,20 +504,20 @@
   function getFaqAnswer(question) {
     const text = question.toLowerCase();
 
-    if (text.includes("payment") || text.includes("bayad") || text.includes("proof") || text.includes("gcash") || text.includes("bpi") || text.includes("usdt")) {
-      return "For payments: choose a plan, open Payments, select the active method, enter the reference or TX hash, amount, and upload proof. Admin will verify before your subscription becomes active.";
+    if (text.includes("deposit") || text.includes("top up") || text.includes("payment") || text.includes("bayad") || text.includes("proof") || text.includes("gcash") || text.includes("bpi") || text.includes("usdt")) {
+      return "For deposits: open Wallet / Deposit, select the active method, enter the reference or TX hash, amount, and upload proof. Admin verifies it before your wallet balance is credited.";
     }
 
     if (text.includes("subscribe") || text.includes("subscription") || text.includes("plan") || text.includes("buy")) {
-      return "For subscriptions: go to Subscribe / Buy, choose your ETX plan, then continue to Payments. Once admin approves the payment, your active subscription appears under Subscriptions.";
+      return "For subscriptions: deposit funds first, wait for admin approval, then go to Subscribe / Buy and purchase your ETX plan using wallet balance.";
     }
 
     if (text.includes("referral") || text.includes("refer") || text.includes("commission") || text.includes("withdraw")) {
-      return "For referrals: copy your referral link from the Referral page. Commissions become available after a referred client's approved payment. Withdrawal requests are reviewed by admin.";
+      return "For referrals: copy your referral link from the Referral page. Commissions become available after a referred client's wallet purchase. Withdrawal requests are reviewed by admin.";
     }
 
     if (text.includes("verify") || text.includes("verification") || text.includes("approved") || text.includes("pending") || text.includes("rejected")) {
-      return "Verification status appears in Subscriptions and Notifications. Pending means admin is reviewing. Approved activates access. Rejected means you need to resend corrected proof or details.";
+      return "Verification status appears in Wallet and Notifications. Pending means admin is reviewing your deposit. Approved credits your wallet. Rejected means you need to resend corrected proof or details.";
     }
 
     if (text.includes("login") || text.includes("account") || text.includes("password") || text.includes("profile")) {
@@ -494,10 +525,10 @@
     }
 
     if (text.includes("support") || text.includes("help") || text.includes("ticket")) {
-      return "For manual help, submit a Support Request below this chat. Include your plan, payment reference, and a short explanation so ETX can review faster.";
+      return "For manual help, submit a Support Request below this chat. Include your plan, deposit reference, and a short explanation so ETX can review faster.";
     }
 
-    return "I can help with ETX payments, subscriptions, referrals, verification, login, and support tickets. For account-specific concerns, send a support request below.";
+    return "I can help with ETX wallet deposits, subscriptions, referrals, verification, login, and support tickets. For account-specific concerns, send a support request below.";
   }
 
   function bindSignOut() {
@@ -698,12 +729,11 @@
         }
 
         if (paymentContext) {
-          paymentContext.textContent = `${currentPlan.product_name} / ${currentPlan.name} / ${formatMoney(currentPlan.price_amount, currentPlan.currency)}`;
+          paymentContext.textContent = `Wallet deposit mode. Approved balance required before buying ${currentPlan.product_name} / ${currentPlan.name}.`;
         }
 
-        setStatus("Plan selected. Continue to payment when ready.", "ok");
-        setClientFlow("payment", "Plan selected. Complete payment details and upload proof for admin verification.");
-        goToTab("payments");
+        setStatus("Plan selected. Buy with wallet balance or deposit funds first.", "ok");
+        setClientFlow("payment", "Plan selected. Use approved wallet balance to buy, or deposit funds first.");
       });
     });
   }
@@ -754,7 +784,7 @@
 
     const method = paymentMethodsCache.find((item) => item.method_key === paymentMethodSelect.value && item.status === "active");
     if (!method) {
-      paymentMethodDetails.innerHTML = `<strong>No method selected</strong><span>Choose an active payment method before submitting proof.</span>`;
+      paymentMethodDetails.innerHTML = `<strong>No method selected</strong><span>Choose an active deposit method before submitting proof.</span>`;
       return;
     }
 
@@ -768,7 +798,7 @@
       <strong>${escapeHtml(method.name)}</strong>
       <span>${escapeHtml(meta || method.type)}</span>
       <span>${escapeHtml(account)}</span>
-      <small>${escapeHtml(method.instructions || "Send exact amount, then upload proof for verification.")}</small>
+      <small>${escapeHtml(method.instructions || "Send exact top-up amount, then upload proof for verification.")}</small>
       ${qr}
     `;
   }
@@ -776,7 +806,8 @@
   async function hydrateClientData() {
     if (!currentUser) return;
 
-    const [orders, payments, subscriptions, referrals, commissionRequests, supportTickets, notifications] = await Promise.all([
+    const [profile, orders, payments, subscriptions, referrals, commissionRequests, supportTickets, notifications, deposits, walletTransactions] = await Promise.all([
+      client.from("profiles").select("*").eq("id", currentUser.id).maybeSingle(),
       client.from("orders").select("id,status,total_amount,currency,created_at,plans(name,products(name))").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("payments").select("id,status,amount,currency,method,transaction_reference,proof_file_name,proof_file_size,proof_file_type,resubmitted_from,review_notes,created_at,payment_methods(name,network),orders(plans(name,products(name)))").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("subscriptions").select("status,expires_at,products(name),plans(name)").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
@@ -784,11 +815,26 @@
       client.from("commission_requests").select("amount,status,payout_method,created_at").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("support_tickets").select("id,subject,message,status,created_at,updated_at,support_replies(id,author_id,message,is_admin_reply,created_at)").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("notifications").select("*").eq("recipient_id", currentUser.id).neq("status", "archived").order("created_at", { ascending: false }).limit(8),
+      client.from("deposit_requests").select("id,status,amount,currency,method,transaction_reference,proof_file_name,review_notes,created_at").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(8),
+      client.from("wallet_transactions").select("id,type,direction,amount,currency,balance_after,description,created_at").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(8),
     ]);
+
+    if (profile.data) {
+      currentProfile = profile.data;
+      renderProfile(currentProfile);
+    }
+
+    const clientDataError = profile.error || orders.error || payments.error || subscriptions.error || referrals.error || commissionRequests.error || supportTickets.error || notifications.error || deposits.error || walletTransactions.error;
+    if (clientDataError) {
+      setStatus(clientDataError.message, "warn");
+      return;
+    }
 
     renderList("[data-orders-list]", orders.data, renderOrderRow, "No orders yet.");
     renderList("[data-payments-list]", payments.data, renderPaymentRow, "No payment submitted yet.");
     renderList("[data-subscriptions-list]", subscriptions.data, renderSubscriptionRow, "No subscriptions yet.");
+    renderListElement(depositRequestsList, deposits.data, renderDepositRequestRow, "No deposit requests yet.");
+    renderListElement(walletTransactionsList, walletTransactions.data, renderWalletTransactionRow, "No wallet activity yet.");
     supportTicketsCache = supportTickets.data || [];
     renderList("[data-support-tickets-list]", supportTickets.data, renderSupportTicketRow, "No support tickets yet.");
     if (!supportTicketsCache.length && supportThread) {
@@ -796,7 +842,9 @@
     }
     bindClientSupportTicketActions();
 
-    syncClientFlowState(orders.data || [], payments.data || [], subscriptions.data || [], supportTickets.data || [], notifications.data || []);
+    walletBalance = Number(currentProfile?.wallet_balance || 0);
+    setText("[data-wallet-balance]", formatMoney(walletBalance, "USD"));
+    syncClientFlowState(orders.data || [], payments.data || [], subscriptions.data || [], supportTickets.data || [], notifications.data || [], deposits.data || []);
 
     const referralRows = referrals.data || [];
     availableCommission = referralRows
@@ -902,7 +950,7 @@
   }
 
   function validateProofFile(file) {
-    if (!file) return "Upload a payment proof file before submitting.";
+    if (!file) return "Upload a deposit proof file before submitting.";
     if (!ALLOWED_PROOF_TYPES.includes(file.type)) return "Proof must be JPG, PNG, WEBP, or PDF.";
     if (file.size > MAX_PROOF_SIZE) return "Proof file must be 8 MB or smaller.";
     return "";
@@ -919,7 +967,7 @@
 
     const roleRequest = hasSuperUserAccess() ? client.from("admin_roles").select("*").order("sort_order", { ascending: true }) : Promise.resolve({ data: [], error: null });
 
-    const [products, plans, paymentMethods, payments, referrals, commissionRequests, supportTickets, subscriptions, orders, profiles, notifications, roles] = await Promise.all([
+    const [products, plans, paymentMethods, payments, deposits, walletTransactions, referrals, commissionRequests, supportTickets, subscriptions, orders, profiles, notifications, roles] = await Promise.all([
       client.from("products").select("*").order("sort_order", { ascending: true }),
       client.from("plans").select("*,products(name,code)").order("created_at", { ascending: false }),
       client.from("payment_methods").select("*").order("sort_order", { ascending: true }),
@@ -928,6 +976,16 @@
         .select("*,payment_methods(name,network),orders(id,status,total_amount,currency,plan_id,plans(name,duration_days,bonus_days,product_id,products(name))),profiles!payments_client_id_fkey(full_name,email,telegram_username)")
         .order("created_at", { ascending: false })
         .limit(30),
+      client
+        .from("deposit_requests")
+        .select("*,payment_methods(name,network),profiles!deposit_requests_client_id_fkey(full_name,email,telegram_username)")
+        .order("created_at", { ascending: false })
+        .limit(30),
+      client
+        .from("wallet_transactions")
+        .select("*,profiles!wallet_transactions_client_id_fkey(full_name,email)")
+        .order("created_at", { ascending: false })
+        .limit(50),
       client
         .from("referrals")
         .select("id,commission_amount,commission_status,created_at,referrer:profiles!referrals_referrer_id_fkey(full_name,email,referral_code),referred:profiles!referrals_referred_client_id_fkey(full_name,email),orders(total_amount,currency)")
@@ -955,7 +1013,7 @@
         .limit(100),
       client
         .from("profiles")
-        .select("id,full_name,email,telegram_username,role,created_at,referral_code")
+        .select("id,full_name,email,telegram_username,role,created_at,referral_code,wallet_balance")
         .eq("role", "client")
         .order("created_at", { ascending: false })
         .limit(100),
@@ -967,15 +1025,15 @@
       roleRequest,
     ]);
 
-    if (products.error || plans.error || paymentMethods.error || payments.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error || profiles.error || notifications.error || roles.error) {
-      setStatus(products.error?.message || plans.error?.message || paymentMethods.error?.message || payments.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message || profiles.error?.message || notifications.error?.message || roles.error?.message, "warn");
+    if (products.error || plans.error || paymentMethods.error || payments.error || deposits.error || walletTransactions.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error || profiles.error || notifications.error || roles.error) {
+      setStatus(products.error?.message || plans.error?.message || paymentMethods.error?.message || payments.error?.message || deposits.error?.message || walletTransactions.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message || profiles.error?.message || notifications.error?.message || roles.error?.message, "warn");
       return;
     }
 
     renderListElement(adminProductsList, products.data, renderAdminProductRow, "No products yet.");
     renderListElement(adminPlansList, plans.data, renderAdminPlanRow, "No plans yet.");
     renderListElement(adminPaymentMethodsList, paymentMethods.data, renderAdminPaymentMethodRow, "No payment methods yet.");
-    renderListElement(adminPaymentQueue, payments.data, renderPaymentReviewCard, "No payments in queue.");
+    renderListElement(adminPaymentQueue, deposits.data, renderDepositReviewCard, "No deposits in queue.");
     renderListElement(adminReferralList, referrals.data, renderAdminReferralRow, "No referral records yet.");
     renderListElement(adminCommissionQueue, commissionRequests.data, renderCommissionReviewCard, "No withdrawal requests yet.");
     renderListElement(adminSupportQueue, supportTickets.data, renderSupportReviewCard, "No support tickets yet.");
@@ -995,6 +1053,8 @@
       plans: plans.data || [],
       paymentMethods: paymentMethods.data || [],
       payments: payments.data || [],
+      deposits: deposits.data || [],
+      walletTransactions: walletTransactions.data || [],
       referrals: referrals.data || [],
       commissionRequests: commissionRequests.data || [],
       supportTickets: supportTickets.data || [],
@@ -1030,13 +1090,13 @@
           return;
         }
 
-        const paymentId = button.dataset.paymentId;
+        const depositId = button.dataset.depositId;
         if (button.hasAttribute("data-admin-approve")) {
-          await approvePayment(paymentId);
+          await approveDeposit(depositId);
           return;
         }
 
-        await rejectPayment(paymentId);
+        await rejectDeposit(depositId);
       });
     });
   }
@@ -1051,20 +1111,20 @@
   }
 
   function renderAdminReports(snapshot) {
-    const pendingPayments = snapshot.payments.filter((payment) => ["pending", "under_review"].includes(payment.status));
+    const pendingDeposits = snapshot.deposits.filter((deposit) => ["pending", "under_review"].includes(deposit.status));
     const approvedPayments = snapshot.payments.filter((payment) => payment.status === "approved");
     const paymentsToday = snapshot.payments.filter((payment) => isToday(payment.created_at));
     const activeSubscriptions = snapshot.subscriptions.filter((subscription) => ["active", "trial"].includes(subscription.status));
     const renewalsDue = activeSubscriptions.filter((subscription) => isWithinDays(subscription.expires_at, 7));
     const openSupport = snapshot.supportTickets.filter((ticket) => ["open", "pending_admin", "pending_client"].includes(ticket.status));
     const pendingCommissionRequests = snapshot.commissionRequests.filter((request) => request.status === "requested");
-    const pendingRevenue = pendingPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const pendingRevenue = pendingDeposits.reduce((sum, deposit) => sum + Number(deposit.amount || 0), 0);
     const approvedRevenue = approvedPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
     const commissionLiability = snapshot.referrals
       .filter((referral) => ["available", "requested", "approved"].includes(referral.commission_status))
       .reduce((sum, referral) => sum + Number(referral.commission_amount || 0), 0);
 
-    setText("[data-report-pending-payments]", String(pendingPayments.length));
+    setText("[data-report-pending-payments]", String(pendingDeposits.length));
     setText("[data-report-active-subscriptions]", String(activeSubscriptions.length));
     setText("[data-report-approved-revenue]", formatMoney(approvedRevenue, "USD"));
     setText("[data-report-payments-today]", String(paymentsToday.length));
@@ -1073,7 +1133,7 @@
 
     renderListElement(
       adminPriorityList,
-      buildPriorityRows({ pendingPayments, pendingCommissionRequests, openSupport, renewalsDue }),
+      buildPriorityRows({ pendingPayments: pendingDeposits, pendingCommissionRequests, openSupport, renewalsDue }),
       renderMetricRow,
       "No urgent admin actions right now."
     );
@@ -1094,7 +1154,7 @@
       adminRevenueList,
       buildRevenueRows(approvedPayments),
       renderMetricRow,
-      "No approved payments yet."
+      "No wallet sales yet."
     );
   }
 
@@ -1128,16 +1188,15 @@
   function buildExportRows(type, snapshot) {
     if (type === "payments") {
       return [
-        ["Client", "Product", "Plan", "Amount", "Currency", "Status", "Reference", "Created At"],
-        ...snapshot.payments.map((payment) => [
-          payment.profiles?.email || payment.profiles?.full_name || "",
-          payment.orders?.plans?.products?.name || "",
-          payment.orders?.plans?.name || "",
-          payment.amount || 0,
-          payment.currency || "USD",
-          payment.status || "",
-          payment.transaction_reference || "",
-          payment.created_at || "",
+        ["Client", "Amount", "Currency", "Status", "Method", "Reference", "Created At"],
+        ...snapshot.deposits.map((deposit) => [
+          deposit.profiles?.email || deposit.profiles?.full_name || "",
+          deposit.amount || 0,
+          deposit.currency || "USD",
+          deposit.status || "",
+          deposit.payment_methods?.name || deposit.method || "",
+          deposit.transaction_reference || "",
+          deposit.created_at || "",
         ]),
       ];
     }
@@ -1170,7 +1229,7 @@
 
   function buildPriorityRows({ pendingPayments, pendingCommissionRequests, openSupport, renewalsDue }) {
     return [
-      pendingPayments.length ? ["Payment proofs", `${pendingPayments.length} to review`, "warn"] : null,
+      pendingPayments.length ? ["Deposit proofs", `${pendingPayments.length} to review`, "warn"] : null,
       pendingCommissionRequests.length ? ["Commission withdrawals", `${pendingCommissionRequests.length} requested`, "warn"] : null,
       openSupport.length ? ["Support tickets", `${openSupport.length} open`, "warn"] : null,
       renewalsDue.length ? ["Renewals due", `${renewalsDue.length} within 7 days`, "warn"] : null,
@@ -1414,12 +1473,12 @@
     await loadPlans();
   }
 
-  async function approvePayment(paymentId) {
+  async function approveDeposit(depositId) {
     const reviewNotes = getAdminReviewNotes();
-    const { data: payment, error: readError } = await client
-      .from("payments")
-      .select("*,orders(id,plan_id,client_id,referral_code_used,plans(duration_days,bonus_days,product_id))")
-      .eq("id", paymentId)
+    const { data: deposit, error: readError } = await client
+      .from("deposit_requests")
+      .select("id,client_id,status")
+      .eq("id", depositId)
       .single();
 
     if (readError) {
@@ -1427,52 +1486,34 @@
       return;
     }
 
-    const expiresAt = new Date();
-    const duration = Number(payment.orders?.plans?.duration_days || 30) + Number(payment.orders?.plans?.bonus_days || 0);
-    expiresAt.setDate(expiresAt.getDate() + duration);
+    if (deposit.status === "approved") {
+      setStatus("Deposit is already approved.", "warn");
+      return;
+    }
 
-    const { error: paymentError } = await client
-      .from("payments")
-      .update({
-        status: "approved",
-        reviewed_by: currentUser.id,
-        reviewed_at: new Date().toISOString(),
-        review_notes: reviewNotes || null,
-      })
-      .eq("id", payment.id);
-
-    const { error: orderError } = await client.from("orders").update({ status: "approved" }).eq("id", payment.order_id);
-
-    const { error: subscriptionError } = await client.from("subscriptions").insert({
-      client_id: payment.client_id,
-      product_id: payment.orders.plans.product_id,
-      plan_id: payment.orders.plan_id,
-      order_id: payment.order_id,
-      status: payment.amount === 0 ? "trial" : "active",
-      expires_at: expiresAt.toISOString(),
-      activated_by: currentUser.id,
+    const { error } = await client.rpc("approve_wallet_deposit", {
+      target_deposit_id: deposit.id,
+      review_note: reviewNotes || null,
     });
 
-    const referralError = await createReferralCommission(payment);
-    const error = paymentError || orderError || subscriptionError || referralError;
     if (error) {
       setStatus(error.message, "warn");
       return;
     }
 
-    await logAdminAction("payment.approved", "payments", payment.id);
+    await logAdminAction("deposit.approved", "deposit_requests", deposit.id);
     await createNotification({
-      recipientId: payment.client_id,
-      title: "Congratulations, subscription active",
+      recipientId: deposit.client_id,
+      title: "Deposit approved",
       message: reviewNotes
-        ? `Your payment is verified and your ETX subscription is now active. Admin note: ${reviewNotes}`
-        : "Your payment is verified and your ETX subscription is now active.",
-      category: "subscription",
-      entityTable: "payments",
-      entityId: payment.id,
+        ? `Your wallet has been credited. Admin note: ${reviewNotes}`
+        : "Your wallet has been credited. You can now buy ETX products using your wallet balance.",
+      category: "payment",
+      entityTable: "deposit_requests",
+      entityId: deposit.id,
     });
     clearAdminReviewNotes();
-    setStatus("Payment approved and subscription activated.", "ok");
+    setStatus("Deposit approved and wallet balance credited.", "ok");
     await loadAdminData();
   }
 
@@ -1504,45 +1545,42 @@
     return error || null;
   }
 
-  async function rejectPayment(paymentId) {
+  async function rejectDeposit(depositId) {
     const reviewNotes = getAdminReviewNotes();
-    const { data: payment, error: readError } = await client.from("payments").select("order_id,client_id").eq("id", paymentId).single();
+    const { data: deposit, error: readError } = await client.from("deposit_requests").select("client_id").eq("id", depositId).single();
     if (readError) {
       setStatus(readError.message, "warn");
       return;
     }
 
-    const { error: paymentError } = await client
-      .from("payments")
+    const { error } = await client
+      .from("deposit_requests")
       .update({
         status: "rejected",
         reviewed_by: currentUser.id,
         reviewed_at: new Date().toISOString(),
         review_notes: reviewNotes || null,
       })
-      .eq("id", paymentId);
-
-    const { error: orderError } = await client.from("orders").update({ status: "rejected" }).eq("id", payment.order_id);
-    const error = paymentError || orderError;
+      .eq("id", depositId);
 
     if (error) {
       setStatus(error.message, "warn");
       return;
     }
 
-    await logAdminAction("payment.rejected", "payments", paymentId);
+    await logAdminAction("deposit.rejected", "deposit_requests", depositId);
     await createNotification({
-      recipientId: payment.client_id,
-      title: "Payment needs correction",
+      recipientId: deposit.client_id,
+      title: "Deposit needs correction",
       message: reviewNotes
-        ? `Your payment proof was rejected. Admin note: ${reviewNotes}`
-        : "Your payment proof was rejected. Please submit corrected payment details or proof.",
+        ? `Your deposit proof was rejected. Admin note: ${reviewNotes}`
+        : "Your deposit proof was rejected. Please submit corrected top-up details or proof.",
       category: "payment",
-      entityTable: "payments",
-      entityId: paymentId,
+      entityTable: "deposit_requests",
+      entityId: depositId,
     });
     clearAdminReviewNotes();
-    setStatus("Payment rejected.", "ok");
+    setStatus("Deposit rejected.", "ok");
     await loadAdminData();
   }
 
@@ -1736,6 +1774,26 @@
     `;
   }
 
+  function renderDepositRequestRow(deposit) {
+    const note = deposit.review_notes ? `<small>Admin note: ${escapeHtml(deposit.review_notes)}</small>` : "";
+    return `
+      <div class="row">
+        <span>${escapeHtml(formatMoney(Number(deposit.amount), deposit.currency))} / ${escapeHtml(formatStatus(deposit.method))} / ${escapeHtml(deposit.transaction_reference)} ${note}</span>
+        <b class="${statusClass(deposit.status)}">${escapeHtml(formatStatus(deposit.status))}</b>
+      </div>
+    `;
+  }
+
+  function renderWalletTransactionRow(transaction) {
+    const sign = transaction.direction === "credit" ? "+" : "-";
+    return `
+      <div class="row">
+        <span>${escapeHtml(transaction.description || formatStatus(transaction.type))} <small>${escapeHtml(formatDateTime(transaction.created_at))}</small></span>
+        <b class="${transaction.direction === "credit" ? "ok" : "warn"}">${sign}${escapeHtml(formatMoney(Number(transaction.amount), transaction.currency))}</b>
+      </div>
+    `;
+  }
+
   function renderSupportTicketRow(ticket) {
     const date = ticket.created_at ? new Date(ticket.created_at).toLocaleDateString() : "Today";
     const replyCount = Array.isArray(ticket.support_replies) ? ticket.support_replies.length : 0;
@@ -1748,23 +1806,25 @@
     `;
   }
 
-  function syncClientFlowState(orders, payments, subscriptions, supportTickets = [], notifications = []) {
-    const latestPayment = payments[0];
-    latestRejectedPaymentId = latestPayment?.status === "rejected" ? latestPayment.id : null;
-    const hasPendingPayment = payments.some((payment) => ["pending", "under_review"].includes(payment.status));
+  function syncClientFlowState(orders, payments, subscriptions, supportTickets = [], notifications = [], deposits = []) {
+    const latestDeposit = deposits[0];
+    const hasPendingPayment = deposits.some((deposit) => ["pending", "under_review"].includes(deposit.status));
     const hasActiveSubscription = subscriptions.some((subscription) => ["active", "trial"].includes(subscription.status));
 
     if (hasActiveSubscription) {
       setClientFlow("subscription", "Congratulations. Your subscription is now active and reflected in your account.");
       renderSubscriptionSummary(subscriptions, payments);
-    } else if (latestPayment?.status === "rejected") {
-      setClientFlow("payment", "Payment was rejected. Please submit corrected payment details or proof.");
+    } else if (latestDeposit?.status === "rejected") {
+      setClientFlow("payment", "Deposit was rejected. Please submit corrected top-up details or proof.");
       renderSubscriptionSummary(subscriptions, payments);
-    } else if (hasPendingPayment || orders.some((order) => ["pending_payment", "under_review"].includes(order.status))) {
-      setClientFlow("verification", "Payment submitted. Please wait for admin verification.");
+    } else if (hasPendingPayment) {
+      setClientFlow("verification", "Deposit submitted. Please wait for admin verification.");
       renderSubscriptionSummary(subscriptions, payments);
-    } else if (!currentPlan) {
-      setClientFlow("select", "Select a plan to start your subscription request.");
+    } else if (walletBalance > 0) {
+      setClientFlow("select", "Wallet funded. Select a plan and buy using your wallet balance.");
+      renderSubscriptionSummary(subscriptions, payments);
+    } else {
+      setClientFlow("payment", "Deposit funds first. Products can only be purchased using approved wallet balance.");
       renderSubscriptionSummary(subscriptions, payments);
     }
 
@@ -1774,10 +1834,10 @@
 
     lastClientSnapshot = { hasPendingPayment, hasActiveSubscription };
     updateBadge(notificationBadge, notifications.filter((notification) => notification.status === "unread").length);
-    renderClientNotifications(notifications, orders, payments, subscriptions, supportTickets);
+    renderClientNotifications(notifications, orders, payments, subscriptions, supportTickets, deposits);
   }
 
-  function renderClientNotifications(savedNotifications, orders, payments, subscriptions, supportTickets) {
+  function renderClientNotifications(savedNotifications, orders, payments, subscriptions, supportTickets, deposits = []) {
     if (!clientNotifications) return;
 
     if (savedNotifications?.length) {
@@ -1796,20 +1856,21 @@
     }
 
     const latestPayment = payments[0];
+    const latestDeposit = deposits[0];
     const activeSubscription = subscriptions.find((subscription) => ["active", "trial"].includes(subscription.status));
     const openTicket = supportTickets.find((ticket) => ["open", "pending_admin", "pending_client"].includes(ticket.status));
     const notifications = [];
 
     if (activeSubscription) {
       notifications.push(["Subscription active", `${activeSubscription.products?.name || "ETX Product"} is active until ${formatDate(activeSubscription.expires_at)}.`, "ok"]);
-    } else if (latestPayment?.status === "under_review") {
-      notifications.push(["Payment under review", "Your proof was received. Please wait for admin verification.", "warn"]);
-    } else if (latestPayment?.status === "rejected") {
-      notifications.push(["Payment rejected", "Please submit corrected payment details or proof.", "rejected"]);
-    } else if (orders.length) {
-      notifications.push(["Order created", "Complete your payment proof upload to continue activation.", "warn"]);
+    } else if (latestDeposit?.status === "under_review") {
+      notifications.push(["Deposit under review", "Your top-up proof was received. Please wait for admin verification.", "warn"]);
+    } else if (latestDeposit?.status === "rejected") {
+      notifications.push(["Deposit rejected", "Please submit corrected deposit details or proof.", "rejected"]);
+    } else if (walletBalance > 0) {
+      notifications.push(["Wallet ready", "Select a plan and buy using your approved wallet balance.", "ok"]);
     } else {
-      notifications.push(["Start subscription", "Select a plan, submit proof, then wait for verification.", ""]);
+      notifications.push(["Deposit first", "Top up your wallet, wait for admin approval, then buy a plan.", ""]);
     }
 
     if (openTicket) {
@@ -1902,22 +1963,22 @@
     const rows = {
       select: [
         ["Choose a plan", "Required", "warn"],
-        ["Submit payment proof", "Waiting", ""],
-        ["Admin verification", "Not started", ""],
+        ["Deposit funds", walletBalance > 0 ? "Funded" : "Required", walletBalance > 0 ? "ok" : "warn"],
+        ["Buy using wallet", "Waiting", ""],
       ],
       payment: [
-        ["Choose a plan", "Done", "ok"],
-        ["Submit payment proof", "Required", "warn"],
+        ["Deposit funds", "Required", "warn"],
         ["Admin verification", "Waiting", ""],
+        ["Buy using wallet", "After approval", ""],
       ],
       verification: [
-        ["Choose a plan", "Done", "ok"],
-        ["Submit payment proof", "Done", "ok"],
+        ["Deposit submitted", "Done", "ok"],
         ["Admin verification", "In review", "warn"],
+        ["Wallet credit", "Waiting", ""],
       ],
       subscription: [
-        ["Choose a plan", "Done", "ok"],
-        ["Submit payment proof", "Done", "ok"],
+        ["Deposit funded", "Done", "ok"],
+        ["Wallet purchase", "Done", "ok"],
         ["Admin verification", "Approved", "ok"],
       ],
     }[step] || [];
@@ -2009,36 +2070,32 @@
     `;
   }
 
-  function renderPaymentReviewCard(payment) {
-    const clientName = payment.profiles?.full_name || payment.profiles?.email || "Client";
-    const plan = payment.orders?.plans;
-    const productName = plan?.products?.name || "ETX Product";
-    const methodName = payment.payment_methods?.name || formatStatus(payment.method || "payment");
-    const proofMeta = [payment.proof_file_name, formatFileSize(payment.proof_file_size), payment.proof_file_type].filter(Boolean).join(" / ");
-    const reviewNote = payment.review_notes ? `<p>Review note: ${escapeHtml(payment.review_notes)}</p>` : "";
-    const resubmitted = payment.resubmitted_from ? `<small class="warn">Resubmitted proof</small>` : "";
-    const proofButton = payment.proof_path
-      ? `<button class="secondary-btn" type="button" data-proof-path="${escapeHtml(payment.proof_path)}" data-payment-id="${escapeHtml(payment.id)}">View Proof</button>`
+  function renderDepositReviewCard(deposit) {
+    const clientName = deposit.profiles?.full_name || deposit.profiles?.email || "Client";
+    const methodName = deposit.payment_methods?.name || formatStatus(deposit.method || "deposit");
+    const proofMeta = [deposit.proof_file_name, formatFileSize(deposit.proof_file_size), deposit.proof_file_type].filter(Boolean).join(" / ");
+    const reviewNote = deposit.review_notes ? `<p>Review note: ${escapeHtml(deposit.review_notes)}</p>` : "";
+    const proofButton = deposit.proof_path
+      ? `<button class="secondary-btn" type="button" data-proof-path="${escapeHtml(deposit.proof_path)}" data-deposit-id="${escapeHtml(deposit.id)}">View Proof</button>`
       : `<span class="warn">No file</span>`;
     const reviewButtons = hasAdminWriteAccess()
       ? `
-        <button class="primary-btn" type="button" data-admin-approve data-payment-id="${escapeHtml(payment.id)}">Approve</button>
-        <button class="secondary-btn" type="button" data-admin-reject data-payment-id="${escapeHtml(payment.id)}">Reject</button>
+        <button class="primary-btn" type="button" data-admin-approve data-deposit-id="${escapeHtml(deposit.id)}">Approve</button>
+        <button class="secondary-btn" type="button" data-admin-reject data-deposit-id="${escapeHtml(deposit.id)}">Reject</button>
       `
       : `<span class="warn">Review only</span>`;
 
     return `
-      <div class="approval-card" data-payment-card="${escapeHtml(payment.id)}">
+      <div class="approval-card" data-deposit-card="${escapeHtml(deposit.id)}">
         <div>
           <strong>${escapeHtml(clientName)}</strong>
-          <p>${escapeHtml(productName)} / ${escapeHtml(plan?.name || "Plan")} / ${escapeHtml(formatMoney(Number(payment.amount), payment.currency))}</p>
+          <p>${escapeHtml(formatMoney(Number(deposit.amount), deposit.currency))} wallet top-up</p>
           <p>Method: ${escapeHtml(methodName)}</p>
-          <p>Ref: ${escapeHtml(payment.transaction_reference || "No reference")}</p>
+          <p>Ref: ${escapeHtml(deposit.transaction_reference || "No reference")}</p>
           <p>Proof: ${escapeHtml(proofMeta || "No metadata")}</p>
           ${reviewNote}
-          ${resubmitted}
         </div>
-        <span class="${payment.status === "approved" ? "ok" : payment.status === "rejected" ? "rejected" : "warn"}">${escapeHtml(payment.status)}</span>
+        <span class="${deposit.status === "approved" ? "ok" : deposit.status === "rejected" ? "rejected" : "warn"}">${escapeHtml(deposit.status)}</span>
         ${proofButton}
         ${reviewButtons}
       </div>
@@ -2062,7 +2119,8 @@
       const active = subscriptions.find((subscription) => subscription.profiles?.email === profile.email && ["active", "trial"].includes(subscription.status));
       const review = payments.find((payment) => payment.profiles?.email === profile.email && ["pending", "under_review"].includes(payment.status));
       const label = profile.full_name || profile.email || "Client";
-      const status = active ? "active" : review ? "payment review" : "registered";
+      const balance = formatMoney(Number(profile.wallet_balance || 0), "USD");
+      const status = active ? `active / ${balance}` : review ? `purchase review / ${balance}` : `wallet ${balance}`;
       const tone = active ? "ok" : review ? "warn" : "";
       return [label, status, tone];
     });
