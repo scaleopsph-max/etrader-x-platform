@@ -578,6 +578,39 @@ h3 {
   min-width: 0;
 }
 
+.sidebar-account {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 16px;
+}
+
+.sidebar-account small {
+  color: var(--muted);
+}
+
+.sidebar-account strong {
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
+}
+
+.page-heading {
+  max-width: 780px;
+  margin-bottom: 18px;
+}
+
+.page-heading h2 {
+  margin: 0 0 8px;
+  font-size: clamp(30px, 4vw, 48px);
+  letter-spacing: 0;
+}
+
+.page-heading p:last-child {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
 .portal-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
@@ -897,6 +930,52 @@ textarea {
   width: auto;
 }
 
+.ai-chat-panel {
+  margin-bottom: 14px;
+}
+
+.ai-chat-messages {
+  display: grid;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px 2px 14px;
+  scrollbar-width: thin;
+}
+
+.ai-message {
+  width: fit-content;
+  max-width: min(680px, 88%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  padding: 12px 14px;
+}
+
+.ai-message.user {
+  justify-self: end;
+  border-color: rgba(25, 216, 255, 0.42);
+  background: rgba(25, 216, 255, 0.12);
+  color: var(--cyan);
+}
+
+.ai-message.bot {
+  justify-self: start;
+}
+
+.ai-chat-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.ai-chat-form input {
+  min-height: 48px;
+}
+
 @media (max-width: 980px) {
   .site-header {
     align-items: stretch;
@@ -944,7 +1023,35 @@ textarea {
     scrollbar-width: thin;
   }
 
-  .portal-sidebar strong {
+  .sidebar-account {
+    align-items: center;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    margin-top: 0;
+    border-top: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 0;
+    padding-left: 10px;
+  }
+
+  .sidebar-account small {
+    display: none;
+  }
+
+  .sidebar-account strong {
+    max-width: 170px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sidebar-account .secondary-btn {
+    width: auto;
+    min-height: 44px;
+    white-space: nowrap;
+  }
+
+  .portal-sidebar > strong {
     display: none;
   }
 
@@ -1059,6 +1166,18 @@ textarea {
   .flow-tracker span {
     flex: 0 0 152px;
     min-height: 54px;
+  }
+
+  .page-heading {
+    margin-bottom: 14px;
+  }
+
+  .page-heading h2 {
+    font-size: 30px;
+  }
+
+  .ai-chat-form {
+    grid-template-columns: 1fr;
   }
 
   .countdown-grid {

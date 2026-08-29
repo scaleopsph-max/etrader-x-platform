@@ -76,35 +76,28 @@
         <button data-tab="subscriptions">Subscriptions</button>
         <button data-tab="referrals">Referral</button>
         <button data-tab="support">Support</button>
+        <div class="sidebar-account">
+          <small>Signed in as</small>
+          <strong data-auth-email>Not signed in</strong>
+          <button class="secondary-btn wide" type="button" data-sign-out>Sign Out</button>
+        </div>
       </aside>
 
       <section class="portal-workspace">
-        <div class="portal-hero">
-          <div>
-            <p class="eyebrow">Client MVP</p>
-            <h1>Manage ETX access, payments, and referrals.</h1>
-            <p class="hero-lead">
-              Prototype flow for clients: login, select product, submit payment proof,
-              wait for approval, then track active subscriptions.
-            </p>
-          </div>
-          <article class="login-card">
-            <strong>Signed In</strong>
-            <p class="codebox">Account: <span data-auth-email>Not signed in</span></p>
-            <button class="secondary-btn" type="button" data-sign-out>Sign Out</button>
-          </article>
-        </div>
-
-        <p class="codebox ok" data-auth-status>Client portal ready.</p>
-        <div class="flow-tracker" aria-label="Subscription process">
-          <span class="active" data-flow-step="select">1. Select Plan</span>
-          <span data-flow-step="payment">2. Submit Payment</span>
-          <span data-flow-step="verification">3. Admin Verification</span>
-          <span data-flow-step="subscription">4. Subscription Active</span>
-        </div>
-        <p class="codebox" data-client-flow-alert>Select a plan to start your subscription request.</p>
-
         <div class="portal-tab active" id="overview">
+          <div class="page-heading">
+            <p class="eyebrow">Client overview</p>
+            <h2>Account dashboard</h2>
+            <p>Track your subscription request, verification status, referrals, and next actions.</p>
+          </div>
+          <p class="codebox ok" data-auth-status>Client portal ready.</p>
+          <div class="flow-tracker" aria-label="Subscription process">
+            <span class="active" data-flow-step="select">1. Select Plan</span>
+            <span data-flow-step="payment">2. Submit Payment</span>
+            <span data-flow-step="verification">3. Admin Verification</span>
+            <span data-flow-step="subscription">4. Subscription Active</span>
+          </div>
+          <p class="codebox" data-client-flow-alert>Select a plan to start your subscription request.</p>
           <div class="stat-grid">
             <article><span>Client Session</span><strong>Active</strong><small class="account-email" data-auth-email>Not signed in</small></article>
             <article><span>Payment Status</span><strong>Review</strong><small>Submitted proof goes to admin queue</small></article>
@@ -134,6 +127,11 @@
         </div>
 
         <div class="portal-tab" id="profile">
+          <div class="page-heading">
+            <p class="eyebrow">Profile</p>
+            <h2>Client profile</h2>
+            <p>Keep your ETX account details accurate for payment verification and support.</p>
+          </div>
           <article class="panel form-panel">
             <h3>Client Profile</h3>
             <form data-profile-form>
@@ -149,6 +147,11 @@
         </div>
 
         <div class="portal-tab" id="buy">
+          <div class="page-heading">
+            <p class="eyebrow">Subscribe</p>
+            <h2>Choose your ETX plan</h2>
+            <p>Select a package first. Your payment form will follow the selected plan.</p>
+          </div>
           <div class="buy-grid" data-dynamic-plans>
             <article class="panel"><h3>Loading plans...</h3><p>Fetching ETX products from Supabase.</p></article>
           </div>
@@ -160,6 +163,11 @@
         </div>
 
         <div class="portal-tab" id="payments">
+          <div class="page-heading">
+            <p class="eyebrow">Payments</p>
+            <h2>Submit payment proof</h2>
+            <p>Use the active payment details below and upload your receipt or transaction proof.</p>
+          </div>
           <article class="panel form-panel">
             <h3>Submit Payment Proof</h3>
             <p class="codebox" data-payment-context>No selected plan yet. Select a plan first.</p>
@@ -198,6 +206,11 @@
         </div>
 
         <div class="portal-tab" id="subscriptions">
+          <div class="page-heading">
+            <p class="eyebrow">Subscriptions</p>
+            <h2>Access status</h2>
+            <p>Review approved subscriptions, pending payments, and renewal timing.</p>
+          </div>
           <div class="stat-grid">
             <article><span>Subscription Status</span><strong data-subscription-state>Pending</strong><small data-subscription-detail>No active subscription yet</small></article>
             <article><span>Renewal Window</span><strong data-renewal-days>--</strong><small>Days remaining</small></article>
@@ -224,6 +237,11 @@
         </div>
 
         <div class="portal-tab" id="referrals">
+          <div class="page-heading">
+            <p class="eyebrow">Referral</p>
+            <h2>Referral rewards</h2>
+            <p>Share your code, track converted clients, and request eligible withdrawals.</p>
+          </div>
           <div class="content-grid">
             <article class="panel">
               <h3>Referral Program</h3>
@@ -248,6 +266,21 @@
         </div>
 
         <div class="portal-tab" id="support">
+          <div class="page-heading">
+            <p class="eyebrow">Support</p>
+            <h2>ETX support center</h2>
+            <p>Ask quick FAQ questions or send a ticket when your concern needs manual review.</p>
+          </div>
+          <article class="panel ai-chat-panel">
+            <h3>AI FAQ Assistant</h3>
+            <div class="ai-chat-messages" data-ai-chat-messages>
+              <div class="ai-message bot">Hi. Ask about subscriptions, payments, referrals, verification, or support.</div>
+            </div>
+            <form class="ai-chat-form" data-ai-chat-form>
+              <input type="text" name="message" placeholder="Ask ETX FAQ..." autocomplete="off" required />
+              <button class="primary-btn" type="submit">Ask</button>
+            </form>
+          </article>
           <article class="panel form-panel">
             <h3>Support Request</h3>
             <form data-support-form>

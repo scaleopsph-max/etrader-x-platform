@@ -49,6 +49,8 @@
   const commissionForm = document.querySelector("[data-commission-form]");
   const supportForm = document.querySelector("[data-support-form]");
   const clientNotifications = document.querySelector("[data-client-notifications]");
+  const aiChatForm = document.querySelector("[data-ai-chat-form]");
+  const aiChatMessages = document.querySelector("[data-ai-chat-messages]");
 
   if (!sdk || !config.url || !config.publishableKey) {
     setStatus("Supabase config is missing. Add the project URL and publishable key first.", "warn");
@@ -85,6 +87,7 @@
     bindPaymentMethodSelect();
     bindCommissionForm();
     bindSupportForm();
+    bindAiSupportChat();
     bindAdminForms();
     bindAdminRoleForm();
     bindReportExports();
@@ -393,6 +396,60 @@
       goToTab("support");
       await hydrateClientData();
     });
+  }
+
+  function bindAiSupportChat() {
+    if (!aiChatForm || !aiChatMessages) return;
+
+    aiChatForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const form = new FormData(aiChatForm);
+      const question = String(form.get("message") || "").trim();
+      if (!question) return;
+
+      appendAiMessage(question, "user");
+      appendAiMessage(getFaqAnswer(question), "bot");
+      aiChatForm.reset();
+      aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
+    });
+  }
+
+  function appendAiMessage(message, role) {
+    if (!aiChatMessages) return;
+    const bubble = document.createElement("div");
+    bubble.className = `ai-message ${role}`;
+    bubble.textContent = message;
+    aiChatMessages.appendChild(bubble);
+  }
+
+  function getFaqAnswer(question) {
+    const text = question.toLowerCase();
+
+    if (text.includes("payment") || text.includes("bayad") || text.includes("proof") || text.includes("gcash") || text.includes("bpi") || text.includes("usdt")) {
+      return "For payments: choose a plan, open Payments, select the active method, enter the reference or TX hash, amount, and upload proof. Admin will verify before your subscription becomes active.";
+    }
+
+    if (text.includes("subscribe") || text.includes("subscription") || text.includes("plan") || text.includes("buy")) {
+      return "For subscriptions: go to Subscribe / Buy, choose your ETX plan, then continue to Payments. Once admin approves the payment, your active subscription appears under Subscriptions.";
+    }
+
+    if (text.includes("referral") || text.includes("refer") || text.includes("commission") || text.includes("withdraw")) {
+      return "For referrals: copy your referral link from the Referral page. Commissions become available after a referred client's approved payment. Withdrawal requests are reviewed by admin.";
+    }
+
+    if (text.includes("verify") || text.includes("verification") || text.includes("approved") || text.includes("pending") || text.includes("rejected")) {
+      return "Verification status appears in Subscriptions and Notifications. Pending means admin is reviewing. Approved activates access. Rejected means you need to resend corrected proof or details.";
+    }
+
+    if (text.includes("login") || text.includes("account") || text.includes("password") || text.includes("profile")) {
+      return "For account concerns: check your Profile details after login. If you cannot access your account, send a support ticket with your email and Telegram username.";
+    }
+
+    if (text.includes("support") || text.includes("help") || text.includes("ticket")) {
+      return "For manual help, submit a Support Request below this chat. Include your plan, payment reference, and a short explanation so ETX can review faster.";
+    }
+
+    return "I can help with ETX payments, subscriptions, referrals, verification, login, and support tickets. For account-specific concerns, send a support request below.";
   }
 
   function bindSignOut() {
