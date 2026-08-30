@@ -101,6 +101,7 @@
     fetched_at: null,
     updated_at: null,
   };
+  let toastHost = null;
 
   if (!sdk || !config.url || !config.publishableKey) {
     setStatus("Supabase config is missing. Add the project URL and publishable key first.", "warn");
@@ -185,46 +186,52 @@
     if (signInForm) {
       signInForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const form = new FormData(signInForm);
-        setStatus("Signing in...");
 
-        const { error } = await client.auth.signInWithPassword({
-          email: String(form.get("email") || "").trim(),
-          password: String(form.get("password") || ""),
+        await withButtonLoading(event.submitter, "Signing in...", async () => {
+          const form = new FormData(signInForm);
+          setStatus("Signing in...");
+
+          const { error } = await client.auth.signInWithPassword({
+            email: String(form.get("email") || "").trim(),
+            password: String(form.get("password") || ""),
+          });
+
+          setStatus(error ? error.message : "Signed in successfully.", error ? "warn" : "ok");
         });
-
-        setStatus(error ? error.message : "Signed in successfully.", error ? "warn" : "ok");
       });
     }
 
     if (signUpForm) {
       signUpForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const form = new FormData(signUpForm);
-        setStatus("Creating client account...");
 
-        const { data, error } = await client.auth.signUp({
-          email: String(form.get("email") || "").trim(),
-          password: String(form.get("password") || ""),
-          options: {
-            data: {
-              full_name: String(form.get("full_name") || "").trim(),
-              telegram_username: String(form.get("telegram_username") || "").trim(),
+        await withButtonLoading(event.submitter, "Creating account...", async () => {
+          const form = new FormData(signUpForm);
+          setStatus("Creating client account...");
+
+          const { data, error } = await client.auth.signUp({
+            email: String(form.get("email") || "").trim(),
+            password: String(form.get("password") || ""),
+            options: {
+              data: {
+                full_name: String(form.get("full_name") || "").trim(),
+                telegram_username: String(form.get("telegram_username") || "").trim(),
+              },
             },
-          },
+          });
+
+          if (error) {
+            setStatus(error.message, "warn");
+            return;
+          }
+
+          if (!data.session) {
+            setStatus("Account created. Please check email confirmation before signing in.", "ok");
+            return;
+          }
+
+          setStatus("Account created and signed in.", "ok");
         });
-
-        if (error) {
-          setStatus(error.message, "warn");
-          return;
-        }
-
-        if (!data.session) {
-          setStatus("Account created. Please check email confirmation before signing in.", "ok");
-          return;
-        }
-
-        setStatus("Account created and signed in.", "ok");
       });
     }
   }
@@ -258,28 +265,30 @@
         return;
       }
 
-      const form = new FormData(profileForm);
-      const update = {
-        full_name: String(form.get("full_name") || "").trim(),
-        email: String(form.get("email") || "").trim(),
-        telegram_username: String(form.get("telegram_username") || "").trim(),
-      };
+      await withButtonLoading(event.submitter, "Saving...", async () => {
+        const form = new FormData(profileForm);
+        const update = {
+          full_name: String(form.get("full_name") || "").trim(),
+          email: String(form.get("email") || "").trim(),
+          telegram_username: String(form.get("telegram_username") || "").trim(),
+        };
 
-      const { data, error } = await client
-        .from("profiles")
-        .update(update)
-        .eq("id", currentUser.id)
-        .select()
-        .single();
+        const { data, error } = await client
+          .from("profiles")
+          .update(update)
+          .eq("id", currentUser.id)
+          .select()
+          .single();
 
-      if (error) {
-        setStatus(error.message, "warn");
-        return;
-      }
+        if (error) {
+          setStatus(error.message, "warn");
+          return;
+        }
 
-      currentProfile = data;
-      renderProfile(data);
-      setStatus("Profile saved.", "ok");
+        currentProfile = data;
+        renderProfile(data);
+        setStatus("Profile saved.", "ok");
+      });
     });
   }
 
@@ -294,88 +303,90 @@
         return;
       }
 
-      const form = new FormData(paymentForm);
-      const selectedMethod = paymentMethodsCache.find((method) => method.method_key === String(form.get("method") || ""));
-      if (!selectedMethod) {
-        setStatus("Select an active deposit method first.", "warn");
-        return;
-      }
+      await withButtonLoading(event.submitter, "Submitting...", async () => {
+        const form = new FormData(paymentForm);
+        const selectedMethod = paymentMethodsCache.find((method) => method.method_key === String(form.get("method") || ""));
+        if (!selectedMethod) {
+          setStatus("Select an active deposit method first.", "warn");
+          return;
+        }
 
-      const file = proofInput?.files?.[0] || null;
-      const fileError = validateProofFile(file);
-      if (fileError) {
-        setProofNote(fileError, "warn");
-        setStatus(fileError, "warn");
-        return;
-      }
+        const file = proofInput?.files?.[0] || null;
+        const fileError = validateProofFile(file);
+        if (fileError) {
+          setProofNote(fileError, "warn");
+          setStatus(fileError, "warn");
+          return;
+        }
 
-      let proofPath = null;
-      try {
-        proofPath = await uploadPaymentProof(file);
-      } catch (error) {
-        setProofNote(error.message, "warn");
-        setStatus(error.message, "warn");
-        return;
-      }
+        let proofPath = null;
+        try {
+          proofPath = await uploadPaymentProof(file);
+        } catch (error) {
+          setProofNote(error.message, "warn");
+          setStatus(error.message, "warn");
+          return;
+        }
 
-      const amount = Number(form.get("amount") || 0);
-      if (!amount || amount <= 0) {
-        setStatus("Deposit amount must be greater than zero.", "warn");
-        return;
-      }
-      const estimate = calculateWalletCredit(amount, selectedMethod);
-      if (!estimate.walletCredit || estimate.walletCredit <= 0) {
-        setStatus("Unable to calculate wallet credit. Check payment method and amount.", "warn");
-        return;
-      }
+        const amount = Number(form.get("amount") || 0);
+        if (!amount || amount <= 0) {
+          setStatus("Deposit amount must be greater than zero.", "warn");
+          return;
+        }
+        const estimate = calculateWalletCredit(amount, selectedMethod);
+        if (!estimate.walletCredit || estimate.walletCredit <= 0) {
+          setStatus("Unable to calculate wallet credit. Check payment method and amount.", "warn");
+          return;
+        }
 
-      const { data: deposit, error: depositError } = await client.from("deposit_requests").insert({
-        client_id: currentUser.id,
-        method: selectedMethod.method_key,
-        payment_method_id: selectedMethod.id,
-        amount: estimate.walletCredit,
-        currency: "USD",
-        paid_amount: estimate.paidAmount,
-        paid_currency: estimate.paidCurrency,
-        exchange_rate: estimate.exchangeRate,
-        exchange_markup: estimate.exchangeMarkup,
-        platform_rate: estimate.platformRate,
-        wallet_credit_amount: estimate.walletCredit,
-        transaction_reference: String(form.get("transaction_reference") || "").trim(),
-        proof_path: proofPath,
-        proof_file_name: file.name,
-        proof_file_size: file.size,
-        proof_file_type: file.type,
-      }).select("id").single();
+        const { data: deposit, error: depositError } = await client.from("deposit_requests").insert({
+          client_id: currentUser.id,
+          method: selectedMethod.method_key,
+          payment_method_id: selectedMethod.id,
+          amount: estimate.walletCredit,
+          currency: "USD",
+          paid_amount: estimate.paidAmount,
+          paid_currency: estimate.paidCurrency,
+          exchange_rate: estimate.exchangeRate,
+          exchange_markup: estimate.exchangeMarkup,
+          platform_rate: estimate.platformRate,
+          wallet_credit_amount: estimate.walletCredit,
+          transaction_reference: String(form.get("transaction_reference") || "").trim(),
+          proof_path: proofPath,
+          proof_file_name: file.name,
+          proof_file_size: file.size,
+          proof_file_type: file.type,
+        }).select("id").single();
 
-      if (depositError) {
-        setStatus(depositError.message, "warn");
-        return;
-      }
+        if (depositError) {
+          setStatus(depositError.message, "warn");
+          return;
+        }
 
-      await createNotification({
-        recipientId: currentUser.id,
-        title: "Deposit submitted",
-        message: `${selectedMethod.name} top-up proof received. Estimated wallet credit is ${formatMoney(estimate.walletCredit, "USD")}. Please wait for admin verification.`,
-        category: "payment",
-        entityTable: "deposit_requests",
-        entityId: deposit.id,
+        await createNotification({
+          recipientId: currentUser.id,
+          title: "Deposit submitted",
+          message: `${selectedMethod.name} top-up proof received. Estimated wallet credit is ${formatMoney(estimate.walletCredit, "USD")}. Please wait for admin verification.`,
+          category: "payment",
+          entityTable: "deposit_requests",
+          entityId: deposit.id,
+        });
+
+        paymentForm.reset();
+        setProofNote("Accepted: JPG, PNG, WEBP, or PDF up to 8 MB.", "");
+        renderPaymentMethodOptions();
+        setStatus("Deposit submitted for admin review.", "ok");
+        setClientFlow("verification", "Deposit received. Please wait while admin verifies your top-up proof.");
+        goToTab("payments");
+        await hydrateClientData();
       });
-
-      paymentForm.reset();
-      setProofNote("Accepted: JPG, PNG, WEBP, or PDF up to 8 MB.", "");
-      renderPaymentMethodOptions();
-      setStatus("Deposit submitted for admin review.", "ok");
-      setClientFlow("verification", "Deposit received. Please wait while admin verifies your top-up proof.");
-      goToTab("payments");
-      await hydrateClientData();
     });
   }
 
   function bindWalletPurchase() {
     if (!walletPurchaseButton && !planModalPurchase) return;
 
-    const buyWithWallet = async () => {
+    const buyWithWallet = async (event) => {
       if (!currentUser) {
         setStatus("Please sign in before buying a plan.", "warn");
         return;
@@ -393,31 +404,33 @@
         return;
       }
 
-      const { data, error } = await client.rpc("purchase_plan_with_wallet", {
-        target_plan_id: currentPlan.id,
-        referral_code: String(planModalReferralCode?.value || walletReferralCode?.value || referredByCode || "").trim().toUpperCase() || null,
+      await withButtonLoading(event?.currentTarget || event?.submitter || planModalPurchase || walletPurchaseButton, "Subscribing...", async () => {
+        const { data, error } = await client.rpc("purchase_plan_with_wallet", {
+          target_plan_id: currentPlan.id,
+          referral_code: String(planModalReferralCode?.value || walletReferralCode?.value || referredByCode || "").trim().toUpperCase() || null,
+        });
+
+        if (error) {
+          setStatus(error.message, "warn");
+          return;
+        }
+
+        walletBalance = Number(data?.wallet_balance || 0);
+        await createNotification({
+          recipientId: currentUser.id,
+          title: "Subscription activated",
+          message: `${currentPlan.product_name} / ${currentPlan.name} was purchased using your wallet balance.`,
+          category: "subscription",
+          entityTable: "subscriptions",
+          entityId: data?.subscription_id || null,
+        });
+
+        setStatus("Plan purchased using wallet balance. Subscription is active.", "ok");
+        setClientFlow("subscription", "Congratulations. Your subscription is now active and reflected in your account.");
+        closePlanModal();
+        goToTab("subscriptions");
+        await hydrateClientData();
       });
-
-      if (error) {
-        setStatus(error.message, "warn");
-        return;
-      }
-
-      walletBalance = Number(data?.wallet_balance || 0);
-      await createNotification({
-        recipientId: currentUser.id,
-        title: "Subscription activated",
-        message: `${currentPlan.product_name} / ${currentPlan.name} was purchased using your wallet balance.`,
-        category: "subscription",
-        entityTable: "subscriptions",
-        entityId: data?.subscription_id || null,
-      });
-
-      setStatus("Plan purchased using wallet balance. Subscription is active.", "ok");
-      setClientFlow("subscription", "Congratulations. Your subscription is now active and reflected in your account.");
-      closePlanModal();
-      goToTab("subscriptions");
-      await hydrateClientData();
     };
 
     walletPurchaseButton?.addEventListener("click", buyWithWallet);
@@ -471,41 +484,43 @@
         return;
       }
 
-      const form = new FormData(commissionForm);
-      const { error } = await client.from("commission_requests").insert({
-        client_id: currentUser.id,
-        amount: availableCommission,
-        payout_method: String(form.get("payout_method") || "").trim(),
-        payout_details: String(form.get("payout_details") || "").trim(),
+      await withButtonLoading(event.submitter, "Submitting...", async () => {
+        const form = new FormData(commissionForm);
+        const { error } = await client.from("commission_requests").insert({
+          client_id: currentUser.id,
+          amount: availableCommission,
+          payout_method: String(form.get("payout_method") || "").trim(),
+          payout_details: String(form.get("payout_details") || "").trim(),
+        });
+
+        if (error) {
+          setStatus(error.message, "warn");
+          return;
+        }
+
+        const { error: referralError } = await client
+          .from("referrals")
+          .update({ commission_status: "requested" })
+          .eq("referrer_id", currentUser.id)
+          .eq("commission_status", "available");
+
+        if (referralError) {
+          setStatus(referralError.message, "warn");
+          return;
+        }
+
+        await createNotification({
+          recipientId: currentUser.id,
+          title: "Withdrawal request submitted",
+          message: "Your referral withdrawal request is now waiting for admin review.",
+          category: "commission",
+          entityTable: "commission_requests",
+        });
+
+        commissionForm.reset();
+        setStatus("Commission withdrawal request submitted for admin review.", "ok");
+        await hydrateClientData();
       });
-
-      if (error) {
-        setStatus(error.message, "warn");
-        return;
-      }
-
-      const { error: referralError } = await client
-        .from("referrals")
-        .update({ commission_status: "requested" })
-        .eq("referrer_id", currentUser.id)
-        .eq("commission_status", "available");
-
-      if (referralError) {
-        setStatus(referralError.message, "warn");
-        return;
-      }
-
-      await createNotification({
-        recipientId: currentUser.id,
-        title: "Withdrawal request submitted",
-        message: "Your referral withdrawal request is now waiting for admin review.",
-        category: "commission",
-        entityTable: "commission_requests",
-      });
-
-      commissionForm.reset();
-      setStatus("Commission withdrawal request submitted for admin review.", "ok");
-      await hydrateClientData();
     });
   }
 
@@ -520,32 +535,34 @@
         return;
       }
 
-      const form = new FormData(supportForm);
-      const { data: ticket, error } = await client.from("support_tickets").insert({
-        client_id: currentUser.id,
-        subject: String(form.get("subject") || "").trim(),
-        message: String(form.get("message") || "").trim(),
-        status: "open",
-      }).select("id,subject").single();
+      await withButtonLoading(event.submitter, "Sending...", async () => {
+        const form = new FormData(supportForm);
+        const { data: ticket, error } = await client.from("support_tickets").insert({
+          client_id: currentUser.id,
+          subject: String(form.get("subject") || "").trim(),
+          message: String(form.get("message") || "").trim(),
+          status: "open",
+        }).select("id,subject").single();
 
-      if (error) {
-        setStatus(error.message, "warn");
-        return;
-      }
+        if (error) {
+          setStatus(error.message, "warn");
+          return;
+        }
 
-      await createNotification({
-        recipientId: currentUser.id,
-        title: "Support request submitted",
-        message: `${ticket.subject} is now in the ETX support queue.`,
-        category: "support",
-        entityTable: "support_tickets",
-        entityId: ticket.id,
+        await createNotification({
+          recipientId: currentUser.id,
+          title: "Support request submitted",
+          message: `${ticket.subject} is now in the ETX support queue.`,
+          category: "support",
+          entityTable: "support_tickets",
+          entityId: ticket.id,
+        });
+
+        supportForm.reset();
+        setStatus("Support ticket submitted. ETX admin will review it.", "ok");
+        goToTab("support");
+        await hydrateClientData();
       });
-
-      supportForm.reset();
-      setStatus("Support ticket submitted. ETX admin will review it.", "ok");
-      goToTab("support");
-      await hydrateClientData();
     });
   }
 
@@ -618,31 +635,33 @@
         event.preventDefault();
         if (!requireAdminWrite()) return;
 
-        const form = new FormData(adminProductForm);
-        const payload = {
-          name: String(form.get("name") || "").trim(),
-          code: String(form.get("code") || "").trim().toUpperCase(),
-          category: String(form.get("category") || "expert_advisor"),
-          description: String(form.get("description") || "").trim(),
-          status: String(form.get("status") || "draft"),
-          sort_order: Number(form.get("sort_order") || 100),
-          created_by: currentUser.id,
-        };
+        await withButtonLoading(event.submitter, "Saving...", async () => {
+          const form = new FormData(adminProductForm);
+          const payload = {
+            name: String(form.get("name") || "").trim(),
+            code: String(form.get("code") || "").trim().toUpperCase(),
+            category: String(form.get("category") || "expert_advisor"),
+            description: String(form.get("description") || "").trim(),
+            status: String(form.get("status") || "draft"),
+            sort_order: Number(form.get("sort_order") || 100),
+            created_by: currentUser.id,
+          };
 
-        const { data: product, error } = await client.from("products").upsert(payload, { onConflict: "code" }).select("id").single();
-        if (error) {
-          setStatus(error.message, "warn");
-          return;
-        }
+          const { data: product, error } = await client.from("products").upsert(payload, { onConflict: "code" }).select("id").single();
+          if (error) {
+            setStatus(error.message, "warn");
+            return;
+          }
 
-        await logAdminAction("product.saved", "products", product?.id || null, {
-          code: payload.code,
-          status: payload.status,
+          await logAdminAction("product.saved", "products", product?.id || null, {
+            code: payload.code,
+            status: payload.status,
+          });
+          adminProductForm.reset();
+          setStatus("Product saved.", "ok");
+          await loadAdminData();
+          await loadPlans();
         });
-        adminProductForm.reset();
-        setStatus("Product saved.", "ok");
-        await loadAdminData();
-        await loadPlans();
       });
     }
 
@@ -651,34 +670,36 @@
         event.preventDefault();
         if (!requireAdminWrite()) return;
 
-        const form = new FormData(adminPlanForm);
-        const payload = {
-          product_id: String(form.get("product_id") || ""),
-          name: String(form.get("name") || "").trim(),
-          price_amount: Number(form.get("price_amount") || 0),
-          currency: String(form.get("currency") || "USD"),
-          duration_days: Number(form.get("duration_days") || 30),
-          bonus_days: Number(form.get("bonus_days") || 0),
-          is_trial: form.get("is_trial") === "on",
-          status: String(form.get("status") || "active"),
-        };
+        await withButtonLoading(event.submitter, "Creating...", async () => {
+          const form = new FormData(adminPlanForm);
+          const payload = {
+            product_id: String(form.get("product_id") || ""),
+            name: String(form.get("name") || "").trim(),
+            price_amount: Number(form.get("price_amount") || 0),
+            currency: String(form.get("currency") || "USD"),
+            duration_days: Number(form.get("duration_days") || 30),
+            bonus_days: Number(form.get("bonus_days") || 0),
+            is_trial: form.get("is_trial") === "on",
+            status: String(form.get("status") || "active"),
+          };
 
-        const { data: plan, error } = await client.from("plans").insert(payload).select("id").single();
-        if (error) {
-          setStatus(error.message, "warn");
-          return;
-        }
+          const { data: plan, error } = await client.from("plans").insert(payload).select("id").single();
+          if (error) {
+            setStatus(error.message, "warn");
+            return;
+          }
 
-        await logAdminAction("plan.created", "plans", plan?.id || null, {
-          product_id: payload.product_id,
-          price_amount: payload.price_amount,
-          currency: payload.currency,
-          status: payload.status,
+          await logAdminAction("plan.created", "plans", plan?.id || null, {
+            product_id: payload.product_id,
+            price_amount: payload.price_amount,
+            currency: payload.currency,
+            status: payload.status,
+          });
+          adminPlanForm.reset();
+          setStatus("Plan created.", "ok");
+          await loadAdminData();
+          await loadPlans();
         });
-        adminPlanForm.reset();
-        setStatus("Plan created.", "ok");
-        await loadAdminData();
-        await loadPlans();
       });
     }
 
@@ -687,48 +708,49 @@
         event.preventDefault();
         if (!requireAdminWrite()) return;
 
-        const form = new FormData(adminPaymentMethodForm);
-        const payload = {
-          method_key: String(form.get("method_key") || "gcash"),
-          name: String(form.get("name") || "").trim(),
-          type: String(form.get("type") || "manual"),
-          account_name: String(form.get("account_name") || "").trim() || null,
-          account_number: String(form.get("account_number") || "").trim() || null,
-          network: String(form.get("network") || "").trim() || null,
-          instructions: String(form.get("instructions") || "").trim() || null,
-          qr_image_url: String(form.get("qr_image_url") || "").trim() || null,
-          status: String(form.get("status") || "active"),
-          sort_order: Number(form.get("sort_order") || 100),
-          created_by: currentUser.id,
-        };
+        await withButtonLoading(event.submitter, "Saving...", async () => {
+          const form = new FormData(adminPaymentMethodForm);
+          const payload = {
+            method_key: String(form.get("method_key") || "gcash"),
+            name: String(form.get("name") || "").trim(),
+            type: String(form.get("type") || "manual"),
+            account_name: String(form.get("account_name") || "").trim() || null,
+            account_number: String(form.get("account_number") || "").trim() || null,
+            network: String(form.get("network") || "").trim() || null,
+            instructions: String(form.get("instructions") || "").trim() || null,
+            qr_image_url: String(form.get("qr_image_url") || "").trim() || null,
+            status: String(form.get("status") || "active"),
+            sort_order: Number(form.get("sort_order") || 100),
+            created_by: currentUser.id,
+          };
 
-        const { data: method, error } = await client.from("payment_methods").upsert(payload, { onConflict: "method_key" }).select("id").single();
-        if (error) {
-          setStatus(error.message, "warn");
-          return;
-        }
+          const { data: method, error } = await client.from("payment_methods").upsert(payload, { onConflict: "method_key" }).select("id").single();
+          if (error) {
+            setStatus(error.message, "warn");
+            return;
+          }
 
-        await logAdminAction("payment_method.saved", "payment_methods", method?.id || null, {
-          method_key: payload.method_key,
-          status: payload.status,
-          type: payload.type,
+          await logAdminAction("payment_method.saved", "payment_methods", method?.id || null, {
+            method_key: payload.method_key,
+            status: payload.status,
+            type: payload.type,
+          });
+          adminPaymentMethodForm.reset();
+          setStatus("Payment method saved.", "ok");
+          await loadPaymentMethods();
+          await loadAdminData();
         });
-        adminPaymentMethodForm.reset();
-        setStatus("Payment method saved.", "ok");
-        await loadPaymentMethods();
-        await loadAdminData();
       });
     }
   }
 
   function bindExchangeRateForm() {
     if (fetchLiveRateButton) {
-      fetchLiveRateButton.addEventListener("click", async () => {
+      fetchLiveRateButton.addEventListener("click", async (event) => {
         if (!requireAdminWrite()) return;
 
-        fetchLiveRateButton.disabled = true;
-        setStatus("Fetching live USD/PHP rate...");
-        try {
+        await withButtonLoading(event.currentTarget, "Fetching...", async () => {
+          setStatus("Fetching live USD/PHP rate...");
           const live = await fetchLivePhpRate();
           exchangeRateCache = normalizeExchangeRate({
             ...exchangeRateCache,
@@ -740,11 +762,7 @@
           renderExchangeRateSummary();
           renderDepositEstimate();
           setStatus("Live USD/PHP rate loaded. Review markup, then save.", "ok");
-        } catch (error) {
-          setStatus(error.message, "warn");
-        } finally {
-          fetchLiveRateButton.disabled = false;
-        }
+        }, "Unable to fetch the live USD/PHP rate.");
       });
     }
 
@@ -754,48 +772,50 @@
       event.preventDefault();
       if (!requireAdminWrite()) return;
 
-      const form = new FormData(adminExchangeRateForm);
-      const liveRate = Number(form.get("live_rate") || 0);
-      const markup = Number(form.get("markup_amount") || 0);
-      const manualValue = String(form.get("manual_rate") || "").trim();
-      const manualRate = manualValue ? Number(manualValue) : null;
+      await withButtonLoading(event.submitter, "Saving...", async () => {
+        const form = new FormData(adminExchangeRateForm);
+        const liveRate = Number(form.get("live_rate") || 0);
+        const markup = Number(form.get("markup_amount") || 0);
+        const manualValue = String(form.get("manual_rate") || "").trim();
+        const manualRate = manualValue ? Number(manualValue) : null;
 
-      if (!liveRate || liveRate <= 0 || markup < 0 || (manualRate !== null && manualRate <= 0)) {
-        setStatus("Enter a valid live rate, markup, and optional manual override.", "warn");
-        return;
-      }
+        if (!liveRate || liveRate <= 0 || markup < 0 || (manualRate !== null && manualRate <= 0)) {
+          setStatus("Enter a valid live rate, markup, and optional manual override.", "warn");
+          return;
+        }
 
-      const payload = {
-        quote_currency: "PHP",
-        base_currency: "USD",
-        live_rate: liveRate,
-        markup_amount: markup,
-        manual_rate: manualRate,
-        source: exchangeRateCache.source || "admin",
-        auto_enabled: String(form.get("auto_enabled")) === "true",
-        fetched_at: exchangeRateCache.fetched_at,
-        updated_by: currentUser.id,
-      };
+        const payload = {
+          quote_currency: "PHP",
+          base_currency: "USD",
+          live_rate: liveRate,
+          markup_amount: markup,
+          manual_rate: manualRate,
+          source: exchangeRateCache.source || "admin",
+          auto_enabled: String(form.get("auto_enabled")) === "true",
+          fetched_at: exchangeRateCache.fetched_at,
+          updated_by: currentUser.id,
+        };
 
-      const { data, error } = await client.from("exchange_rates").upsert(payload, { onConflict: "quote_currency" }).select("*").single();
-      if (error) {
-        setStatus(error.message, "warn");
-        return;
-      }
+        const { data, error } = await client.from("exchange_rates").upsert(payload, { onConflict: "quote_currency" }).select("*").single();
+        if (error) {
+          setStatus(error.message, "warn");
+          return;
+        }
 
-      exchangeRateCache = normalizeExchangeRate(data);
-      hydrateExchangeRateForm();
-      renderExchangeRateSummary();
-      renderDepositEstimate();
-      await logAdminAction("exchange_rate.updated", "exchange_rates", null, {
-        quote_currency: payload.quote_currency,
-        live_rate: payload.live_rate,
-        markup_amount: payload.markup_amount,
-        manual_rate: payload.manual_rate,
-        final_rate: data.final_rate,
+        exchangeRateCache = normalizeExchangeRate(data);
+        hydrateExchangeRateForm();
+        renderExchangeRateSummary();
+        renderDepositEstimate();
+        await logAdminAction("exchange_rate.updated", "exchange_rates", null, {
+          quote_currency: payload.quote_currency,
+          live_rate: payload.live_rate,
+          markup_amount: payload.markup_amount,
+          manual_rate: payload.manual_rate,
+          final_rate: data.final_rate,
+        });
+        setStatus("Conversion rate saved.", "ok");
+        await loadAdminData();
       });
-      setStatus("Conversion rate saved.", "ok");
-      await loadAdminData();
     });
   }
 
@@ -806,28 +826,30 @@
       event.preventDefault();
       if (!requireSuperUser()) return;
 
-      const form = new FormData(adminRoleForm);
-      const roleKey = normalizeRoleKey(form.get("role_key"));
-      const payload = {
-        name: String(form.get("name") || "").trim(),
-        role_key: roleKey,
-        description: String(form.get("description") || "").trim(),
-        created_by: currentUser.id,
-      };
+      await withButtonLoading(event.submitter, "Saving...", async () => {
+        const form = new FormData(adminRoleForm);
+        const roleKey = normalizeRoleKey(form.get("role_key"));
+        const payload = {
+          name: String(form.get("name") || "").trim(),
+          role_key: roleKey,
+          description: String(form.get("description") || "").trim(),
+          created_by: currentUser.id,
+        };
 
-      const { data: role, error } = await client.from("admin_roles").upsert(payload, { onConflict: "role_key" }).select("id").single();
-      if (error) {
-        setStatus(error.message, "warn");
-        return;
-      }
+        const { data: role, error } = await client.from("admin_roles").upsert(payload, { onConflict: "role_key" }).select("id").single();
+        if (error) {
+          setStatus(error.message, "warn");
+          return;
+        }
 
-      await logAdminAction("role.saved", "admin_roles", role?.id || null, {
-        role_key: payload.role_key,
-        name: payload.name,
+        await logAdminAction("role.saved", "admin_roles", role?.id || null, {
+          role_key: payload.role_key,
+          name: payload.name,
+        });
+        adminRoleForm.reset();
+        setStatus("Role saved. Assign the matching app_metadata role after final permission mapping.", "ok");
+        await loadAdminRoles();
       });
-      adminRoleForm.reset();
-      setStatus("Role saved. Assign the matching app_metadata role after final permission mapping.", "ok");
-      await loadAdminRoles();
     });
   }
 
@@ -1415,41 +1437,45 @@
 
   function bindAdminPaymentActions() {
     document.querySelectorAll("[data-admin-approve], [data-admin-reject], [data-proof-path], [data-admin-product-status], [data-admin-plan-status]").forEach((button) => {
+      if (button.dataset.bound === "true") return;
+      button.dataset.bound = "true";
       button.addEventListener("click", async () => {
         if (button.hasAttribute("data-proof-path")) {
           if (!requireAdmin()) return;
-          await openProof(button.dataset.proofPath);
+          await withButtonLoading(button, "Opening...", () => openProof(button.dataset.proofPath));
           return;
         }
 
         if (!requireAdminWrite()) return;
 
         if (button.hasAttribute("data-admin-product-status")) {
-          await updateRecordStatus("products", button.dataset.productId, button.dataset.adminProductStatus);
+          await withButtonLoading(button, "Updating...", () => updateRecordStatus("products", button.dataset.productId, button.dataset.adminProductStatus));
           return;
         }
 
         if (button.hasAttribute("data-admin-plan-status")) {
-          await updateRecordStatus("plans", button.dataset.planId, button.dataset.adminPlanStatus);
+          await withButtonLoading(button, "Updating...", () => updateRecordStatus("plans", button.dataset.planId, button.dataset.adminPlanStatus));
           return;
         }
 
         const depositId = button.dataset.depositId;
         if (button.hasAttribute("data-admin-approve")) {
-          await approveDeposit(depositId);
+          await withButtonLoading(button, "Approving...", () => approveDeposit(depositId));
           return;
         }
 
-        await rejectDeposit(depositId);
+        await withButtonLoading(button, "Rejecting...", () => rejectDeposit(depositId));
       });
     });
   }
 
   function bindAdminPaymentMethodActions() {
     document.querySelectorAll("[data-admin-method-status]").forEach((button) => {
+      if (button.dataset.bound === "true") return;
+      button.dataset.bound = "true";
       button.addEventListener("click", async () => {
         if (!requireAdminWrite()) return;
-        await updateRecordStatus("payment_methods", button.dataset.methodId, button.dataset.adminMethodStatus);
+        await withButtonLoading(button, "Updating...", () => updateRecordStatus("payment_methods", button.dataset.methodId, button.dataset.adminMethodStatus));
       });
     });
   }
@@ -1860,15 +1886,17 @@
 
   function bindAdminCommissionActions() {
     document.querySelectorAll("[data-admin-commission-approve], [data-admin-commission-reject]").forEach((button) => {
+      if (button.dataset.bound === "true") return;
+      button.dataset.bound = "true";
       button.addEventListener("click", async () => {
         if (!requireAdminWrite()) return;
 
         if (button.hasAttribute("data-admin-commission-approve")) {
-          await updateCommissionRequest(button.dataset.requestId, "approved");
+          await withButtonLoading(button, "Approving...", () => updateCommissionRequest(button.dataset.requestId, "approved"));
           return;
         }
 
-        await updateCommissionRequest(button.dataset.requestId, "rejected");
+        await withButtonLoading(button, "Rejecting...", () => updateCommissionRequest(button.dataset.requestId, "rejected"));
       });
     });
   }
@@ -1930,7 +1958,7 @@
       button.dataset.bound = "true";
       button.addEventListener("click", async () => {
         if (!requireSupportAccess()) return;
-        await updateSupportTicket(button.dataset.ticketId, button.dataset.adminTicketStatus);
+        await withButtonLoading(button, "Updating...", () => updateSupportTicket(button.dataset.ticketId, button.dataset.adminTicketStatus));
       });
     });
 
@@ -1941,55 +1969,57 @@
         event.preventDefault();
         if (!requireSupportAccess()) return;
 
-        const ticketId = form.dataset.ticketId;
-        const message = String(new FormData(form).get("reply") || "").trim();
-        if (!message) {
-          setStatus("Write a support reply before sending.", "warn");
-          return;
-        }
+        await withButtonLoading(event.submitter, "Sending...", async () => {
+          const ticketId = form.dataset.ticketId;
+          const message = String(new FormData(form).get("reply") || "").trim();
+          if (!message) {
+            setStatus("Write a support reply before sending.", "warn");
+            return;
+          }
 
-        const { data: ticket, error: ticketError } = await client
-          .from("support_tickets")
-          .update({
-            status: "pending_client",
-            assigned_to: currentUser.id,
-          })
-          .eq("id", ticketId)
-          .select("client_id,subject")
-          .single();
+          const { data: ticket, error: ticketError } = await client
+            .from("support_tickets")
+            .update({
+              status: "pending_client",
+              assigned_to: currentUser.id,
+            })
+            .eq("id", ticketId)
+            .select("client_id,subject")
+            .single();
 
-        if (ticketError) {
-          setStatus(ticketError.message, "warn");
-          return;
-        }
+          if (ticketError) {
+            setStatus(ticketError.message, "warn");
+            return;
+          }
 
-        const { error } = await client.from("support_replies").insert({
-          ticket_id: ticketId,
-          author_id: currentUser.id,
-          message,
-          is_admin_reply: true,
+          const { error } = await client.from("support_replies").insert({
+            ticket_id: ticketId,
+            author_id: currentUser.id,
+            message,
+            is_admin_reply: true,
+          });
+
+          if (error) {
+            setStatus(error.message, "warn");
+            return;
+          }
+
+          await logAdminAction("support.reply", "support_tickets", ticketId, {
+            subject: ticket.subject,
+            client_id: ticket.client_id,
+          });
+          await createNotification({
+            recipientId: ticket.client_id,
+            title: "Support replied",
+            message: `ETX replied to ${ticket.subject}. Please check your support thread.`,
+            category: "support",
+            entityTable: "support_tickets",
+            entityId: ticketId,
+          });
+
+          setStatus("Support reply sent to client.", "ok");
+          await loadAdminData();
         });
-
-        if (error) {
-          setStatus(error.message, "warn");
-          return;
-        }
-
-        await logAdminAction("support.reply", "support_tickets", ticketId, {
-          subject: ticket.subject,
-          client_id: ticket.client_id,
-        });
-        await createNotification({
-          recipientId: ticket.client_id,
-          title: "Support replied",
-          message: `ETX replied to ${ticket.subject}. Please check your support thread.`,
-          category: "support",
-          entityTable: "support_tickets",
-          entityId: ticketId,
-        });
-
-        setStatus("Support reply sent to client.", "ok");
-        await loadAdminData();
       });
     });
   }
@@ -2014,32 +2044,34 @@
           return;
         }
 
-        const ticketId = form.dataset.ticketId;
-        const message = String(new FormData(form).get("reply") || "").trim();
-        if (!message) {
-          setStatus("Write a reply before sending.", "warn");
-          return;
-        }
+        await withButtonLoading(event.submitter, "Sending...", async () => {
+          const ticketId = form.dataset.ticketId;
+          const message = String(new FormData(form).get("reply") || "").trim();
+          if (!message) {
+            setStatus("Write a reply before sending.", "warn");
+            return;
+          }
 
-        const { error: replyError } = await client.from("support_replies").insert({
-          ticket_id: ticketId,
-          author_id: currentUser.id,
-          message,
-          is_admin_reply: false,
+          const { error: replyError } = await client.from("support_replies").insert({
+            ticket_id: ticketId,
+            author_id: currentUser.id,
+            message,
+            is_admin_reply: false,
+          });
+
+          const { error: ticketError } = await client.from("support_tickets").update({ status: "pending_admin" }).eq("id", ticketId);
+          const error = replyError || ticketError;
+
+          if (error) {
+            setStatus(error.message, "warn");
+            return;
+          }
+
+          setStatus("Reply sent. ETX support will review your thread.", "ok");
+          await hydrateClientData();
+          const ticket = supportTicketsCache.find((item) => item.id === ticketId);
+          if (ticket) renderSupportThread(ticket);
         });
-
-        const { error: ticketError } = await client.from("support_tickets").update({ status: "pending_admin" }).eq("id", ticketId);
-        const error = replyError || ticketError;
-
-        if (error) {
-          setStatus(error.message, "warn");
-          return;
-        }
-
-        setStatus("Reply sent. ETX support will review your thread.", "ok");
-        await hydrateClientData();
-        const ticket = supportTicketsCache.find((item) => item.id === ticketId);
-        if (ticket) renderSupportThread(ticket);
       });
     });
   }
@@ -2915,12 +2947,84 @@
     target.innerHTML = rows?.length ? rows.map(renderer).join("") : `<p class="codebox">${escapeHtml(emptyText)}</p>`;
   }
 
+  async function withButtonLoading(button, loadingText, action, fallbackError = "Action could not be completed.") {
+    if (!button) {
+      try {
+        return await action();
+      } catch (error) {
+        setStatus(error?.message || fallbackError, "warn");
+        return null;
+      }
+    }
+
+    if (button.disabled && button.dataset.busy === "true") return null;
+
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.dataset.busy = "true";
+    button.classList.add("is-processing");
+    button.textContent = loadingText;
+
+    try {
+      return await action();
+    } catch (error) {
+      setStatus(error?.message || fallbackError, "warn");
+      return null;
+    } finally {
+      button.disabled = false;
+      button.dataset.busy = "false";
+      button.classList.remove("is-processing");
+      button.textContent = originalText;
+    }
+  }
+
   function setStatus(message, tone) {
     authStatuses.forEach((authStatus) => {
       const isPortalStatus = authStatus.classList.contains("portal-status");
       authStatus.textContent = message;
       authStatus.className = `codebox${isPortalStatus ? " portal-status" : ""}${tone ? ` ${tone}` : ""}`;
     });
+    showToast(message, tone);
+  }
+
+  function showToast(message, tone = "info") {
+    const text = String(message || "").trim();
+    if (!text || text.toLowerCase().startsWith("checking ")) return;
+
+    const host = getToastHost();
+    const toast = document.createElement("div");
+    const normalizedTone = tone === "ok" ? "ok" : tone === "warn" || tone === "rejected" ? "warn" : "info";
+    toast.className = `toast ${normalizedTone}`;
+    toast.setAttribute("role", normalizedTone === "warn" ? "alert" : "status");
+    toast.innerHTML = `
+      <span>${escapeHtml(toastTitle(normalizedTone))}</span>
+      <strong>${escapeHtml(text)}</strong>
+    `;
+    host.appendChild(toast);
+
+    while (host.children.length > 4) {
+      host.firstElementChild?.remove();
+    }
+
+    window.setTimeout(() => {
+      toast.classList.add("leaving");
+      window.setTimeout(() => toast.remove(), 220);
+    }, normalizedTone === "warn" ? 5200 : 3600);
+  }
+
+  function getToastHost() {
+    if (toastHost) return toastHost;
+    toastHost = document.createElement("div");
+    toastHost.className = "toast-stack";
+    toastHost.setAttribute("aria-live", "polite");
+    document.body.appendChild(toastHost);
+    return toastHost;
+  }
+
+  function toastTitle(tone) {
+    if (tone === "ok") return "Success";
+    if (tone === "warn") return "Needs attention";
+    return "Working";
   }
 
   function setText(selector, value) {
