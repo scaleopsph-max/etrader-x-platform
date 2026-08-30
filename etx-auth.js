@@ -55,6 +55,13 @@
   const adminAuditList = document.querySelector("[data-admin-audit-list]");
   const auditExportButton = document.querySelector("[data-audit-export]");
   const adminClientsList = document.querySelector("[data-admin-clients-list]");
+  const adminClientDirectory = document.querySelector("[data-admin-client-directory]");
+  const adminClientProfile = document.querySelector("[data-admin-client-profile]");
+  const clientProfileSearch = document.querySelector("[data-client-profile-search]");
+  const landingCreativeForm = document.querySelector("[data-landing-creative-form]");
+  const landingCreativeClear = document.querySelector("[data-landing-creative-clear]");
+  const landingCreativesList = document.querySelector("[data-landing-creatives-list]");
+  const landingCreativePreview = document.querySelector("[data-landing-creative-preview]");
   const adminSubscriptionsList = document.querySelector("[data-admin-subscriptions-list]");
   const adminExpiringList = document.querySelector("[data-admin-expiring-list]");
   const adminRolesList = document.querySelector("[data-admin-roles-list]");
@@ -124,6 +131,8 @@
   let availableCommission = 0;
   let walletBalance = 0;
   let adminReportSnapshot = null;
+  let adminClientSnapshot = null;
+  let landingCreativesCache = [];
   let auditLogsCache = [];
   let supportTicketsCache = [];
   const referredByCode = getReferralCode();
@@ -154,6 +163,8 @@
     bindReportExports();
     bindAuditFilters();
     bindAuditExport();
+    bindClientProfileSearch();
+    bindLandingCreativeForm();
     bindSignOut();
     await refreshSession();
     await loadPlans();
@@ -1321,8 +1332,16 @@
         .order("created_at", { ascending: false })
         .limit(150)
       : Promise.resolve({ data: [], error: null });
+    const landingRequest = hasAdminAccess()
+      ? client
+        .from("landing_creatives")
+        .select("*")
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false })
+        .limit(80)
+      : Promise.resolve({ data: [], error: null });
 
-    const [products, plans, paymentMethods, payments, deposits, walletTransactions, referrals, commissionRequests, supportTickets, subscriptions, orders, profiles, notifications, roles, exchangeRates, auditLogs] = await Promise.all([
+    const [products, plans, paymentMethods, payments, deposits, walletTransactions, referrals, commissionRequests, supportTickets, subscriptions, orders, profiles, notifications, roles, exchangeRates, auditLogs, landingCreatives] = await Promise.all([
       client.from("products").select("*").order("sort_order", { ascending: true }),
       client.from("plans").select("*,products(name,code)").order("created_at", { ascending: false }),
       client.from("payment_methods").select("*").order("sort_order", { ascending: true }),
@@ -1343,7 +1362,7 @@
         .limit(50),
       client
         .from("referrals")
-        .select("id,commission_amount,commission_status,created_at,referrer:profiles!referrals_referrer_id_fkey(full_name,email,referral_code),referred:profiles!referrals_referred_client_id_fkey(full_name,email),orders(total_amount,currency)")
+        .select("id,referrer_id,referred_client_id,order_id,commission_amount,commission_status,created_at,referrer:profiles!referrals_referrer_id_fkey(full_name,email,referral_code),referred:profiles!referrals_referred_client_id_fkey(full_name,email),orders(total_amount,currency)")
         .order("created_at", { ascending: false })
         .limit(30),
       client
@@ -1358,12 +1377,12 @@
         .limit(30),
       client
         .from("subscriptions")
-        .select("id,status,expires_at,created_at,products(name),plans(name),profiles!subscriptions_client_id_fkey(full_name,email)")
+        .select("id,client_id,status,starts_at,expires_at,created_at,products(name),plans(name),profiles!subscriptions_client_id_fkey(full_name,email)")
         .order("created_at", { ascending: false })
         .limit(100),
       client
         .from("orders")
-        .select("id,status,total_amount,currency,created_at,plans(name,products(name)),profiles!orders_client_id_fkey(full_name,email)")
+        .select("id,client_id,status,total_amount,currency,created_at,plans(name,products(name)),profiles!orders_client_id_fkey(full_name,email)")
         .order("created_at", { ascending: false })
         .limit(100),
       client
@@ -1376,14 +1395,15 @@
         .from("notifications")
         .select("*,recipient:profiles!notifications_recipient_id_fkey(full_name,email)")
         .order("created_at", { ascending: false })
-        .limit(20),
+        .limit(80),
       roleRequest,
       client.from("exchange_rates").select("*").eq("quote_currency", "PHP").maybeSingle(),
       auditRequest,
+      landingRequest,
     ]);
 
-    if (products.error || plans.error || paymentMethods.error || payments.error || deposits.error || walletTransactions.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error || profiles.error || notifications.error || roles.error || exchangeRates.error || auditLogs.error) {
-      setStatus(products.error?.message || plans.error?.message || paymentMethods.error?.message || payments.error?.message || deposits.error?.message || walletTransactions.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message || profiles.error?.message || notifications.error?.message || roles.error?.message || exchangeRates.error?.message || auditLogs.error?.message, "warn");
+    if (products.error || plans.error || paymentMethods.error || payments.error || deposits.error || walletTransactions.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error || profiles.error || notifications.error || roles.error || exchangeRates.error || auditLogs.error || landingCreatives.error) {
+      setStatus(products.error?.message || plans.error?.message || paymentMethods.error?.message || payments.error?.message || deposits.error?.message || walletTransactions.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message || profiles.error?.message || notifications.error?.message || roles.error?.message || exchangeRates.error?.message || auditLogs.error?.message || landingCreatives.error?.message, "warn");
       return;
     }
 
@@ -1399,21 +1419,7 @@
     renderListElement(adminPaymentQueue, deposits.data, renderDepositReviewCard, "No deposits in queue.");
     renderListElement(adminReferralList, referrals.data, renderAdminReferralRow, "No referral records yet.");
     renderListElement(adminCommissionQueue, commissionRequests.data, renderCommissionReviewCard, "No withdrawal requests yet.");
-    renderListElement(adminSupportQueue, supportTickets.data, renderSupportReviewCard, "No support tickets yet.");
-    renderListElement(adminClientsList, buildClientRows(profiles.data || [], subscriptions.data || [], payments.data || []), renderMetricRow, "No client accounts yet.");
-    renderListElement(adminSubscriptionsList, subscriptions.data, renderAdminSubscriptionRow, "No subscriptions yet.");
-    renderListElement(adminExpiringList, buildExpiringRows(subscriptions.data || []), renderMetricRow, "No renewals due yet.");
-    renderListElement(adminNotificationsList, notifications.data, renderAdminNotificationRow, "No notifications yet.");
-    renderListElement(adminRolesList, roles.data, renderAdminRoleRow, "No custom roles yet.");
-    updateBadge(adminNotificationBadge, (notifications.data || []).filter((notification) => notification.status === "unread").length);
-    auditLogsCache = auditLogs.data || [];
-    renderAuditLogs();
-    hydrateAdminProductOptions(products.data || []);
-    bindAdminPaymentActions();
-    bindAdminPaymentMethodActions();
-    bindAdminCommissionActions();
-    bindAdminSupportActions();
-    adminReportSnapshot = {
+    const dataSnapshot = {
       products: products.data || [],
       plans: plans.data || [],
       paymentMethods: paymentMethods.data || [],
@@ -1428,8 +1434,30 @@
       profiles: profiles.data || [],
       notifications: notifications.data || [],
       roles: roles.data || [],
+      auditLogs: auditLogs.data || [],
       exchangeRates: exchangeRates.data ? [exchangeRates.data] : [],
+      landingCreatives: landingCreatives.data || [],
     };
+
+    renderListElement(adminSupportQueue, dataSnapshot.supportTickets, renderSupportReviewCard, "No support tickets yet.");
+    renderListElement(adminClientsList, buildClientRows(dataSnapshot.profiles, dataSnapshot.subscriptions, dataSnapshot.payments), renderMetricRow, "No client accounts yet.");
+    renderClientDirectory(dataSnapshot);
+    renderListElement(adminSubscriptionsList, subscriptions.data, renderAdminSubscriptionRow, "No subscriptions yet.");
+    renderListElement(adminExpiringList, buildExpiringRows(subscriptions.data || []), renderMetricRow, "No renewals due yet.");
+    renderListElement(adminNotificationsList, notifications.data, renderAdminNotificationRow, "No notifications yet.");
+    renderListElement(adminRolesList, roles.data, renderAdminRoleRow, "No custom roles yet.");
+    landingCreativesCache = dataSnapshot.landingCreatives;
+    renderLandingCreatives();
+    updateBadge(adminNotificationBadge, (notifications.data || []).filter((notification) => notification.status === "unread").length);
+    auditLogsCache = auditLogs.data || [];
+    renderAuditLogs();
+    hydrateAdminProductOptions(products.data || []);
+    bindAdminPaymentActions();
+    bindAdminPaymentMethodActions();
+    bindAdminCommissionActions();
+    bindAdminSupportActions();
+    adminReportSnapshot = dataSnapshot;
+    adminClientSnapshot = dataSnapshot;
     renderAdminReports(adminReportSnapshot);
     paymentMethodsCache = paymentMethods.data || [];
     renderPaymentMethodOptions();
@@ -1506,6 +1534,67 @@
       if (!requireAdminWrite()) return;
       downloadCsv("etx-audit-logs.csv", buildAuditExportRows(getFilteredAuditLogs()));
       setStatus("Audit logs exported.", "ok");
+    });
+  }
+
+  function bindClientProfileSearch() {
+    if (!clientProfileSearch) return;
+    clientProfileSearch.addEventListener("input", () => {
+      if (adminClientSnapshot) renderClientDirectory(adminClientSnapshot);
+    });
+  }
+
+  function bindLandingCreativeForm() {
+    if (landingCreativeClear) {
+      landingCreativeClear.addEventListener("click", () => {
+        clearLandingCreativeForm();
+        setStatus("Landing creative form cleared.", "ok");
+      });
+    }
+
+    if (!landingCreativeForm) return;
+    landingCreativeForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!requireAdminWrite()) return;
+
+      await withButtonLoading(event.submitter, "Saving...", async () => {
+        const form = new FormData(landingCreativeForm);
+        const payload = {
+          section_key: String(form.get("section_key") || "promo").trim(),
+          title: String(form.get("title") || "").trim(),
+          subtitle: String(form.get("subtitle") || "").trim() || null,
+          body: String(form.get("body") || "").trim() || null,
+          image_url: String(form.get("image_url") || "").trim() || null,
+          cta_label: String(form.get("cta_label") || "").trim() || null,
+          cta_url: String(form.get("cta_url") || "").trim() || null,
+          promo_starts_at: datetimeLocalToIso(form.get("promo_starts_at")),
+          promo_ends_at: datetimeLocalToIso(form.get("promo_ends_at")),
+          status: String(form.get("status") || "draft"),
+          sort_order: Number(form.get("sort_order") || 100),
+          updated_by: currentUser.id,
+        };
+        const id = String(form.get("id") || "").trim();
+        if (!id) payload.created_by = currentUser.id;
+
+        const query = id
+          ? client.from("landing_creatives").update(payload).eq("id", id).select("*").single()
+          : client.from("landing_creatives").insert(payload).select("*").single();
+        const { data, error } = await query;
+
+        if (error) {
+          setStatus(error.message, "warn");
+          return;
+        }
+
+        await logAdminAction(id ? "landing_creative.updated" : "landing_creative.created", "landing_creatives", data.id, {
+          section_key: data.section_key,
+          status: data.status,
+          title: data.title,
+        });
+        clearLandingCreativeForm();
+        setStatus("Landing creative saved.", "ok");
+        await loadAdminData();
+      });
     });
   }
 
@@ -1878,6 +1967,340 @@
     return Array.from(totals.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([product, amount]) => [product, formatMoney(amount, "USD"), "ok"]);
+  }
+
+  function renderClientDirectory(snapshot) {
+    if (!adminClientDirectory) return;
+
+    const search = String(clientProfileSearch?.value || "").trim().toLowerCase();
+    const profiles = (snapshot.profiles || [])
+      .filter((profile) => {
+        const searchable = [profile.full_name, profile.email, profile.telegram_username, profile.referral_code]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return !search || searchable.includes(search);
+      })
+      .sort((a, b) => String(a.email || "").localeCompare(String(b.email || "")));
+
+    adminClientDirectory.innerHTML = profiles.length
+      ? profiles.map((profile) => renderClientDirectoryRow(profile, snapshot)).join("")
+      : `<p class="codebox">No clients match this search.</p>`;
+
+    document.querySelectorAll("[data-view-client-profile]").forEach((button) => {
+      if (button.dataset.bound === "true") return;
+      button.dataset.bound = "true";
+      button.addEventListener("click", () => renderClientProfile(button.dataset.viewClientProfile));
+    });
+
+    const activeClientStillVisible = profiles.some((profile) => profile.id === adminClientProfile?.dataset.clientId);
+    if ((!adminClientProfile?.dataset.clientId || !activeClientStillVisible) && profiles.length) {
+      renderClientProfile(profiles[0].id);
+    }
+  }
+
+  function renderClientDirectoryRow(profile, snapshot) {
+    const subscriptions = (snapshot.subscriptions || []).filter((subscription) => subscription.client_id === profile.id);
+    const deposits = (snapshot.deposits || []).filter((deposit) => deposit.client_id === profile.id);
+    const activeCount = subscriptions.filter((subscription) => subscription.status === "active").length;
+    const latestDeposit = deposits[0];
+
+    return `
+      <div class="client-directory-row">
+        <div>
+          <strong>${escapeHtml(profile.full_name || profile.email || "Client")}</strong>
+          <span>${escapeHtml(profile.email || "No email")}</span>
+          <small>${escapeHtml(profile.telegram_username || profile.referral_code || "No Telegram or referral code")}</small>
+        </div>
+        <div class="client-directory-meta">
+          <span>${activeCount} active</span>
+          <span>${latestDeposit ? formatStatus(latestDeposit.status) : "No deposit"}</span>
+        </div>
+        <button class="secondary-btn" type="button" data-view-client-profile="${escapeHtml(profile.id)}">View Profile</button>
+      </div>
+    `;
+  }
+
+  function renderClientProfile(clientId) {
+    if (!adminClientProfile || !adminClientSnapshot) return;
+    const profile = (adminClientSnapshot.profiles || []).find((item) => item.id === clientId);
+
+    if (!profile) {
+      adminClientProfile.dataset.clientId = "";
+      adminClientProfile.innerHTML = `
+        <h3>Select a client</h3>
+        <p class="codebox">Client profile not found.</p>
+      `;
+      return;
+    }
+
+    adminClientProfile.dataset.clientId = clientId;
+    const history = getClientHistory(clientId, adminClientSnapshot);
+    const approvedDeposits = history.deposits.filter((deposit) => deposit.status === "approved");
+    const activeSubscriptions = history.subscriptions.filter((subscription) => subscription.status === "active");
+    const referralEarnings = history.referrals.reduce((sum, referral) => sum + Number(referral.commission_amount || 0), 0);
+
+    adminClientProfile.innerHTML = `
+      <div class="client-profile-header">
+        <div>
+          <p class="eyebrow">Selected Client</p>
+          <h3>${escapeHtml(profile.full_name || profile.email || "Client")}</h3>
+          <p>${escapeHtml(profile.email || "No email")} ${profile.telegram_username ? `- ${escapeHtml(profile.telegram_username)}` : ""}</p>
+        </div>
+        <span class="pill">${escapeHtml(profile.referral_code || "No referral code")}</span>
+      </div>
+
+      <div class="mini-stat-grid">
+        <article><span>Wallet Credit</span><strong>${formatMoney(history.walletCredit, "USD")}</strong></article>
+        <article><span>Approved Deposits</span><strong>${approvedDeposits.length}</strong></article>
+        <article><span>Active Access</span><strong>${activeSubscriptions.length}</strong></article>
+        <article><span>Referral Earnings</span><strong>${formatMoney(referralEarnings, "USD")}</strong></article>
+      </div>
+
+      <div class="client-timeline">
+        <h4>Recent Timeline</h4>
+        ${buildClientTimeline(profile, history).length ? buildClientTimeline(profile, history).map(renderTimelineItem).join("") : `<p class="codebox">No client activity yet.</p>`}
+      </div>
+
+      <div class="client-history-grid">
+        ${renderClientHistoryBlock("Deposits", history.deposits, renderClientDepositHistory)}
+        ${renderClientHistoryBlock("Subscriptions", history.subscriptions, renderClientSubscriptionHistory)}
+        ${renderClientHistoryBlock("Orders", history.orders, renderClientOrderHistory)}
+        ${renderClientHistoryBlock("Support", history.supportTickets, renderClientSupportHistory)}
+        ${renderClientHistoryBlock("Referrals", history.referrals, renderClientReferralHistory)}
+        ${renderClientHistoryBlock("Notifications", history.notifications, renderClientNotificationHistory)}
+        ${renderClientHistoryBlock("Admin Actions", history.auditLogs, renderClientAuditHistory)}
+      </div>
+    `;
+  }
+
+  function getClientHistory(clientId, snapshot) {
+    const walletTransactions = (snapshot.walletTransactions || []).filter((item) => item.client_id === clientId);
+    return {
+      deposits: (snapshot.deposits || []).filter((item) => item.client_id === clientId),
+      walletTransactions,
+      supportTickets: (snapshot.supportTickets || []).filter((item) => item.client_id === clientId),
+      subscriptions: (snapshot.subscriptions || []).filter((item) => item.client_id === clientId),
+      orders: (snapshot.orders || []).filter((item) => item.client_id === clientId),
+      referrals: (snapshot.referrals || []).filter((item) => item.referrer_id === clientId || item.referred_client_id === clientId),
+      notifications: (snapshot.notifications || []).filter((item) => item.recipient_id === clientId),
+      auditLogs: (snapshot.auditLogs || []).filter((item) => JSON.stringify(item.metadata || {}).includes(clientId) || item.entity_id === clientId),
+      walletCredit: walletTransactions.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    };
+  }
+
+  function renderClientHistoryBlock(title, rows, renderer) {
+    return `
+      <section class="history-block">
+        <h4>${escapeHtml(title)}</h4>
+        ${rows.length ? rows.slice(0, 6).map(renderer).join("") : `<p class="muted-text">No records yet.</p>`}
+      </section>
+    `;
+  }
+
+  function renderClientDepositHistory(deposit) {
+    return `
+      <div class="history-row">
+        <span>${escapeHtml(formatStatus(deposit.status))}</span>
+        <strong>${formatMoney(deposit.usd_credit_amount || deposit.amount || 0, "USD")}</strong>
+        <small>${escapeHtml(deposit.payment_reference || "No reference")} - ${formatDate(deposit.created_at)}</small>
+      </div>
+    `;
+  }
+
+  function renderClientSubscriptionHistory(subscription) {
+    return `
+      <div class="history-row">
+        <span>${escapeHtml(formatStatus(subscription.status))}</span>
+        <strong>${escapeHtml(subscription.plans?.products?.name || subscription.plans?.name || "Subscription")}</strong>
+        <small>${formatDate(subscription.starts_at || subscription.created_at)} to ${formatDate(subscription.expires_at)}</small>
+      </div>
+    `;
+  }
+
+  function renderClientOrderHistory(order) {
+    return `
+      <div class="history-row">
+        <span>${escapeHtml(formatStatus(order.status))}</span>
+        <strong>${escapeHtml(order.plans?.products?.name || order.plans?.name || "Order")}</strong>
+        <small>${formatMoney(order.total_amount || 0, order.currency || "USD")} - ${formatDate(order.created_at)}</small>
+      </div>
+    `;
+  }
+
+  function renderClientSupportHistory(ticket) {
+    return `
+      <div class="history-row">
+        <span>${escapeHtml(formatStatus(ticket.status))}</span>
+        <strong>${escapeHtml(ticket.subject || "Support Ticket")}</strong>
+        <small>${escapeHtml(ticket.category || "General")} - ${formatDate(ticket.created_at)}</small>
+      </div>
+    `;
+  }
+
+  function renderClientReferralHistory(referral) {
+    return `
+      <div class="history-row">
+        <span>${escapeHtml(formatStatus(referral.status))}</span>
+        <strong>${formatMoney(referral.commission_amount || 0, "USD")}</strong>
+        <small>${escapeHtml(referral.referrer_id === adminClientProfile?.dataset.clientId ? "Earned commission" : "Referred by another client")} - ${formatDate(referral.created_at)}</small>
+      </div>
+    `;
+  }
+
+  function renderClientNotificationHistory(notification) {
+    return `
+      <div class="history-row">
+        <span>${escapeHtml(formatStatus(notification.status))}</span>
+        <strong>${escapeHtml(notification.title || "Notification")}</strong>
+        <small>${escapeHtml(notification.body || "")} ${formatDate(notification.created_at)}</small>
+      </div>
+    `;
+  }
+
+  function renderClientAuditHistory(log) {
+    return `
+      <div class="history-row">
+        <span>${escapeHtml(formatStatus(log.action || "action"))}</span>
+        <strong>${escapeHtml(log.entity_table || "Record")}</strong>
+        <small>${formatDate(log.created_at)}</small>
+      </div>
+    `;
+  }
+
+  function buildClientTimeline(profile, history) {
+    const rows = [
+      ...history.deposits.map((item) => ({ at: item.created_at, type: "Deposit", title: formatMoney(item.usd_credit_amount || item.amount || 0, "USD"), detail: formatStatus(item.status) })),
+      ...history.orders.map((item) => ({ at: item.created_at, type: "Order", title: item.plans?.products?.name || item.plans?.name || "Order", detail: formatStatus(item.status) })),
+      ...history.subscriptions.map((item) => ({ at: item.created_at || item.starts_at, type: "Subscription", title: item.plans?.products?.name || item.plans?.name || "Subscription", detail: formatStatus(item.status) })),
+      ...history.supportTickets.map((item) => ({ at: item.created_at, type: "Support", title: item.subject || "Support ticket", detail: formatStatus(item.status) })),
+      ...history.referrals.map((item) => ({ at: item.created_at, type: "Referral", title: formatMoney(item.commission_amount || 0, "USD"), detail: formatStatus(item.status) })),
+      ...history.notifications.map((item) => ({ at: item.created_at, type: "Notification", title: item.title || "Notification", detail: formatStatus(item.status) })),
+    ];
+
+    if (profile.created_at) {
+      rows.push({ at: profile.created_at, type: "Account", title: "Client account created", detail: profile.email || "" });
+    }
+
+    return rows
+      .filter((item) => item.at)
+      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+      .slice(0, 10);
+  }
+
+  function renderTimelineItem(item) {
+    return `
+      <div class="timeline-item">
+        <span>${escapeHtml(item.type)}</span>
+        <div>
+          <strong>${escapeHtml(item.title)}</strong>
+          <small>${escapeHtml(item.detail)} - ${formatDate(item.at)}</small>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderLandingCreatives() {
+    if (!landingCreativesList) return;
+
+    landingCreativesList.innerHTML = landingCreativesCache.length
+      ? landingCreativesCache.map(renderLandingCreativeRow).join("")
+      : `<p class="codebox">No landing creatives yet.</p>`;
+
+    document.querySelectorAll("[data-edit-landing-creative]").forEach((button) => {
+      if (button.dataset.bound === "true") return;
+      button.dataset.bound = "true";
+      button.addEventListener("click", () => {
+        const creative = landingCreativesCache.find((item) => item.id === button.dataset.editLandingCreative);
+        hydrateLandingCreativeForm(creative);
+        renderLandingCreativePreview(creative);
+      });
+    });
+
+    if (landingCreativePreview && landingCreativesCache.length && !landingCreativePreview.dataset.previewId) {
+      renderLandingCreativePreview(landingCreativesCache[0]);
+    }
+  }
+
+  function renderLandingCreativeRow(creative) {
+    const promoWindow = [formatDate(creative.promo_starts_at), formatDate(creative.promo_ends_at)]
+      .filter((value) => value && value !== "Pending")
+      .join(" to ");
+
+    return `
+      <div class="landing-creative-row">
+        <div>
+          <span class="pill">${escapeHtml(formatStatus(creative.section_key))}</span>
+          <strong>${escapeHtml(creative.title)}</strong>
+          <small>${escapeHtml(creative.subtitle || creative.body || "No supporting copy")}</small>
+          ${promoWindow ? `<small>${escapeHtml(promoWindow)}</small>` : ""}
+        </div>
+        <div class="client-directory-meta">
+          <span>${escapeHtml(formatStatus(creative.status))}</span>
+          <span>Sort ${Number(creative.sort_order || 0)}</span>
+        </div>
+        <button class="secondary-btn" type="button" data-edit-landing-creative="${escapeHtml(creative.id)}">Edit</button>
+      </div>
+    `;
+  }
+
+  function hydrateLandingCreativeForm(creative) {
+    if (!landingCreativeForm || !creative) return;
+
+    landingCreativeForm.elements.id.value = creative.id || "";
+    landingCreativeForm.elements.section_key.value = creative.section_key || "promo";
+    landingCreativeForm.elements.status.value = creative.status || "draft";
+    landingCreativeForm.elements.title.value = creative.title || "";
+    landingCreativeForm.elements.subtitle.value = creative.subtitle || "";
+    landingCreativeForm.elements.image_url.value = creative.image_url || "";
+    landingCreativeForm.elements.cta_label.value = creative.cta_label || "";
+    landingCreativeForm.elements.cta_url.value = creative.cta_url || "";
+    landingCreativeForm.elements.sort_order.value = creative.sort_order ?? 100;
+    landingCreativeForm.elements.promo_starts_at.value = isoToDatetimeLocal(creative.promo_starts_at);
+    landingCreativeForm.elements.promo_ends_at.value = isoToDatetimeLocal(creative.promo_ends_at);
+    landingCreativeForm.elements.body.value = creative.body || "";
+    setStatus("Landing creative loaded for editing.", "ok");
+  }
+
+  function clearLandingCreativeForm() {
+    if (!landingCreativeForm) return;
+    landingCreativeForm.reset();
+    landingCreativeForm.elements.id.value = "";
+    landingCreativeForm.elements.sort_order.value = 100;
+    if (landingCreativePreview) {
+      landingCreativePreview.dataset.previewId = "";
+      landingCreativePreview.innerHTML = `<p class="codebox">Select or create a landing creative to preview it here.</p>`;
+    }
+  }
+
+  function renderLandingCreativePreview(creative) {
+    if (!landingCreativePreview || !creative) return;
+
+    landingCreativePreview.dataset.previewId = creative.id || "";
+    landingCreativePreview.innerHTML = `
+      <div class="landing-preview-card">
+        ${creative.image_url ? `<img src="${escapeHtml(creative.image_url)}" alt="${escapeHtml(creative.title)}" loading="lazy" />` : ""}
+        <span class="pill">${escapeHtml(formatStatus(creative.section_key))} - ${escapeHtml(formatStatus(creative.status))}</span>
+        <h3>${escapeHtml(creative.title)}</h3>
+        ${creative.subtitle ? `<p>${escapeHtml(creative.subtitle)}</p>` : ""}
+        ${creative.body ? `<small>${escapeHtml(creative.body)}</small>` : ""}
+        ${creative.cta_label ? `<button class="primary-btn" type="button">${escapeHtml(creative.cta_label)}</button>` : ""}
+      </div>
+    `;
+  }
+
+  function datetimeLocalToIso(value) {
+    if (!value) return null;
+    const date = new Date(String(value));
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
+  function isoToDatetimeLocal(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return offsetDate.toISOString().slice(0, 16);
   }
 
   function renderMetricRow([label, value, tone]) {

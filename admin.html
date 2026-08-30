@@ -75,6 +75,8 @@
         <button data-tab="admin-rates">Rates</button>
         <button data-tab="admin-payments">Deposit Queue</button>
         <button data-tab="admin-clients">Clients</button>
+        <button data-tab="admin-client-profile">Client Profiling</button>
+        <button data-tab="admin-landing" data-admin-write-only>Landing Creatives</button>
         <button data-tab="admin-subscriptions">Subscriptions</button>
         <button data-tab="admin-referrals">Referrals</button>
         <button data-tab="admin-support">Support</button>
@@ -292,6 +294,77 @@
               <button class="secondary-btn wide" type="button" data-jump="admin-payments">Review Deposit Queue</button>
             </article>
           </div>
+        </div>
+
+        <div class="portal-tab" id="admin-client-profile">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">Client 360</p>
+            <h2>Client profiling</h2>
+            <p>Review each client's wallet, deposits, subscriptions, referrals, support tickets, notifications, and related admin actions.</p>
+          </div>
+          <article class="panel report-filter-panel">
+            <h3>Find Client</h3>
+            <div class="form-grid single">
+              <label>Search<input type="search" data-client-profile-search placeholder="Search name, email, Telegram, referral code" /></label>
+            </div>
+          </article>
+          <div class="content-grid client-profile-layout">
+            <article class="panel">
+              <h3>Client Directory</h3>
+              <div data-admin-client-directory>
+                <p class="codebox">Client profiles load after sign in.</p>
+              </div>
+            </article>
+            <article class="panel client-profile-panel" data-admin-client-profile>
+              <h3>Select a client</h3>
+              <p class="codebox">Choose a client to view full account history.</p>
+            </article>
+          </div>
+        </div>
+
+        <div class="portal-tab" id="admin-landing">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">Landing creatives</p>
+            <h2>Landing content control</h2>
+            <p>Prepare configurable pictures, text, CTA copy, and upcoming promos for the landing page.</p>
+          </div>
+          <div class="content-grid">
+            <article class="panel form-panel" data-admin-write-only>
+              <h3>Create Creative</h3>
+              <form data-landing-creative-form>
+                <input type="hidden" name="id" />
+                <div class="form-grid">
+                  <label>Section<select name="section_key" required><option value="hero">Hero</option><option value="urgency">Urgency Banner</option><option value="promo">Promo Card</option><option value="upcoming_promo">Upcoming Promo</option><option value="testimonial">Testimonial</option><option value="gallery">Gallery Image</option><option value="faq">FAQ</option></select></label>
+                  <label>Status<select name="status"><option value="draft">Draft</option><option value="active">Active</option><option value="hidden">Hidden</option></select></label>
+                  <label>Title<input type="text" name="title" placeholder="Anniversary promo access" required /></label>
+                  <label>Subtitle<input type="text" name="subtitle" placeholder="Limited access window" /></label>
+                  <label>Image URL<input type="url" name="image_url" placeholder="https://..." /></label>
+                  <label>CTA Label<input type="text" name="cta_label" placeholder="Open Client Portal" /></label>
+                  <label>CTA URL<input type="text" name="cta_url" placeholder="client.html" /></label>
+                  <label>Sort Order<input type="number" name="sort_order" value="100" min="0" /></label>
+                  <label>Starts At<input type="datetime-local" name="promo_starts_at" /></label>
+                  <label>Ends At<input type="datetime-local" name="promo_ends_at" /></label>
+                </div>
+                <label>Body<textarea name="body" placeholder="Main landing copy, promo details, or testimonial text."></textarea></label>
+                <div class="form-actions">
+                  <button class="primary-btn" type="submit">Save Creative</button>
+                  <button class="secondary-btn" type="button" data-landing-creative-clear>Clear Form</button>
+                </div>
+              </form>
+            </article>
+            <article class="panel">
+              <h3>Creative Preview</h3>
+              <div data-landing-creative-preview>
+                <p class="codebox">Select or create a landing creative to preview it here.</p>
+              </div>
+            </article>
+          </div>
+          <article class="panel order-panel">
+            <h3>Creative Library</h3>
+            <div data-landing-creatives-list>
+              <p class="codebox">Landing creatives load after sign in.</p>
+            </div>
+          </article>
         </div>
 
         <div class="portal-tab" id="admin-subscriptions">
