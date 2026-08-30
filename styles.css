@@ -742,6 +742,163 @@ textarea {
   white-space: nowrap;
 }
 
+.profile-command-center {
+  display: grid;
+  gap: 16px;
+}
+
+.profile-identity-card {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.profile-identity-card h3,
+.profile-identity-card p,
+.profile-identity-meta strong {
+  overflow-wrap: anywhere;
+}
+
+.profile-identity-meta {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 12px;
+  width: min(100%, 360px);
+  border: 1px solid rgba(25, 216, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(25, 216, 255, 0.08);
+  padding: 14px;
+}
+
+.profile-identity-meta span {
+  color: var(--muted);
+}
+
+.profile-identity-meta strong {
+  color: var(--cyan);
+  text-align: right;
+}
+
+.profile-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.profile-summary-grid article {
+  min-width: 0;
+  border: 1px solid rgba(25, 216, 255, 0.18);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), transparent 36%),
+    rgba(6, 20, 28, 0.78);
+  padding: 18px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
+}
+
+.profile-summary-grid span,
+.profile-summary-grid small {
+  display: block;
+  color: var(--muted);
+}
+
+.profile-summary-grid strong {
+  display: block;
+  margin: 8px 0;
+  color: var(--text);
+  font-size: 26px;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
+.profile-detail-grid {
+  align-items: start;
+}
+
+.profile-access-row,
+.profile-activity-row,
+.profile-referral-row {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 13px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.profile-access-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.profile-access-row:last-child,
+.profile-activity-row:last-child,
+.profile-referral-row:last-child {
+  border-bottom: 0;
+}
+
+.profile-access-row strong,
+.profile-access-row span,
+.profile-access-row b,
+.profile-activity-row strong,
+.profile-activity-row small,
+.profile-referral-row span,
+.profile-referral-row b,
+.profile-referral-row small {
+  overflow-wrap: anywhere;
+}
+
+.profile-access-row span,
+.profile-activity-row small,
+.profile-referral-row small {
+  display: block;
+  color: var(--muted);
+}
+
+.profile-access-row b,
+.profile-referral-row b {
+  color: var(--green);
+}
+
+.profile-activity-row {
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: start;
+}
+
+.profile-activity-row > span {
+  color: var(--cyan);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.profile-referral-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.profile-referral-summary div {
+  min-width: 0;
+  border: 1px solid rgba(25, 216, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(25, 216, 255, 0.07);
+  padding: 12px;
+}
+
+.profile-referral-summary span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.profile-referral-summary strong {
+  display: block;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
 .content-grid {
   grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
 }
@@ -1770,6 +1927,8 @@ textarea {
   .reason-grid,
   .pricing-row,
   .stat-grid,
+  .profile-summary-grid,
+  .profile-referral-summary,
   .content-grid,
   .tool-category-grid,
   .buy-grid,
@@ -1900,6 +2059,20 @@ textarea {
 
   .client-profile-header {
     flex-direction: column;
+  }
+
+  .profile-identity-card {
+    flex-direction: column;
+  }
+
+  .profile-identity-meta,
+  .profile-access-row,
+  .profile-activity-row {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-identity-meta strong {
+    text-align: left;
   }
 
   .method-data-list span,

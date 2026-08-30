@@ -137,21 +137,67 @@
         <div class="portal-tab" id="profile">
           <div class="page-heading">
             <p class="eyebrow">Profile</p>
-            <h2>Client profile</h2>
-            <p>Keep your ETX account details accurate for payment verification and support.</p>
+            <h2>Account center</h2>
+            <p>Review your ETX account, wallet, subscriptions, referrals, and recent activity in one place.</p>
           </div>
-          <article class="panel form-panel">
-            <h3>Client Profile</h3>
-            <form data-profile-form>
-              <div class="form-grid">
-                <label>Full Name<input type="text" name="full_name" /></label>
-                <label>Email<input type="email" name="email" /></label>
-                <label>Telegram Username<input type="text" name="telegram_username" /></label>
-                <label>Referral Code<input type="text" name="referral_code" readonly /></label>
+          <div class="profile-command-center">
+            <article class="panel profile-identity-card">
+              <div>
+                <p class="eyebrow">Client Account</p>
+                <h3 data-profile-display-name>Loading profile...</h3>
+                <p data-profile-display-email>Account details will appear after sign in.</p>
               </div>
-              <button class="primary-btn" type="submit">Save Profile</button>
-            </form>
-          </article>
+              <div class="profile-identity-meta">
+                <span>Telegram</span>
+                <strong data-profile-display-telegram>Not set</strong>
+                <span>Referral Code</span>
+                <strong data-profile-display-referral>Pending</strong>
+              </div>
+            </article>
+
+            <div class="profile-summary-grid">
+              <article><span>Wallet Balance</span><strong data-profile-wallet-balance>$0.00</strong><small>Approved USD balance</small></article>
+              <article><span>Active Products</span><strong data-profile-active-count>0</strong><small data-profile-active-detail>No active access yet</small></article>
+              <article><span>Referral Earnings</span><strong data-profile-referral-earnings>$0.00</strong><small data-profile-referral-detail>Available commission</small></article>
+              <article><span>Latest Deposit</span><strong data-profile-latest-deposit>None</strong><small data-profile-latest-deposit-detail>No top-up yet</small></article>
+            </div>
+
+            <div class="content-grid profile-detail-grid">
+              <article class="panel">
+                <h3>Active Access</h3>
+                <div data-profile-active-subscriptions>
+                  <p class="codebox">No active subscriptions yet.</p>
+                </div>
+              </article>
+              <article class="panel">
+                <h3>Recent Activity</h3>
+                <div data-profile-recent-activity>
+                  <p class="codebox">Recent activity will appear here.</p>
+                </div>
+              </article>
+            </div>
+
+            <div class="content-grid profile-detail-grid">
+              <article class="panel">
+                <h3>Referral Snapshot</h3>
+                <div data-profile-referral-snapshot>
+                  <p class="codebox">Referral summary will appear here.</p>
+                </div>
+              </article>
+              <article class="panel form-panel">
+                <h3>Edit Details</h3>
+                <form data-profile-form>
+                  <div class="form-grid single">
+                    <label>Full Name<input type="text" name="full_name" /></label>
+                    <label>Email<input type="email" name="email" /></label>
+                    <label>Telegram Username<input type="text" name="telegram_username" /></label>
+                    <label>Referral Code<input type="text" name="referral_code" readonly /></label>
+                  </div>
+                  <button class="primary-btn" type="submit">Save Profile</button>
+                </form>
+              </article>
+            </div>
+          </div>
         </div>
 
         <div class="portal-tab" id="buy">

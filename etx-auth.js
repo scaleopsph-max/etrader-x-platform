@@ -77,6 +77,9 @@
   const clientNextActions = document.querySelector("[data-client-next-actions]");
   const walletPurchaseButton = document.querySelector("[data-wallet-purchase]");
   const walletReferralCode = document.querySelector("[data-wallet-referral-code]");
+  const profileActiveSubscriptions = document.querySelector("[data-profile-active-subscriptions]");
+  const profileRecentActivity = document.querySelector("[data-profile-recent-activity]");
+  const profileReferralSnapshot = document.querySelector("[data-profile-referral-snapshot]");
   const planModal = document.querySelector("[data-plan-modal]");
   const planModalClose = document.querySelector("[data-plan-modal-close]");
   const planModalPurchase = document.querySelector("[data-plan-modal-purchase]");
@@ -1166,10 +1169,10 @@
 
     const [profile, orders, payments, subscriptions, referrals, commissionRequests, supportTickets, notifications, deposits, walletTransactions] = await Promise.all([
       client.from("profiles").select("*").eq("id", currentUser.id).maybeSingle(),
-      client.from("orders").select("id,status,total_amount,currency,created_at,plans(name,products(name))").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
+      client.from("orders").select("id,status,total_amount,currency,created_at,plans(name,duration_days,bonus_days,products(name,category))").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(8),
       client.from("payments").select("id,status,amount,currency,method,transaction_reference,proof_file_name,proof_file_size,proof_file_type,resubmitted_from,review_notes,created_at,payment_methods(name,network),orders(plans(name,products(name)))").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
-      client.from("subscriptions").select("status,expires_at,products(name),plans(name)").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
-      client.from("referrals").select("commission_amount,commission_status").eq("referrer_id", currentUser.id),
+      client.from("subscriptions").select("status,starts_at,expires_at,created_at,products(name,category),plans(name,duration_days,bonus_days)").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(8),
+      client.from("referrals").select("commission_amount,commission_status,created_at").eq("referrer_id", currentUser.id).order("created_at", { ascending: false }).limit(12),
       client.from("commission_requests").select("amount,status,payout_method,created_at").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("support_tickets").select("id,subject,message,status,created_at,updated_at,support_replies(id,author_id,message,is_admin_reply,created_at)").eq("client_id", currentUser.id).order("created_at", { ascending: false }).limit(5),
       client.from("notifications").select("*").eq("recipient_id", currentUser.id).neq("status", "archived").order("created_at", { ascending: false }).limit(8),
@@ -1193,6 +1196,17 @@
     renderList("[data-subscriptions-list]", subscriptions.data, renderSubscriptionRow, "No subscriptions yet.");
     renderListElement(depositRequestsList, deposits.data, renderDepositRequestRow, "No deposit requests yet.");
     renderListElement(walletTransactionsList, walletTransactions.data, renderWalletTransactionRow, "No wallet activity yet.");
+    renderClientProfileDashboard({
+      profile: currentProfile,
+      orders: orders.data || [],
+      payments: payments.data || [],
+      subscriptions: subscriptions.data || [],
+      referrals: referrals.data || [],
+      deposits: deposits.data || [],
+      walletTransactions: walletTransactions.data || [],
+      supportTickets: supportTickets.data || [],
+      notifications: notifications.data || [],
+    });
     supportTicketsCache = supportTickets.data || [];
     renderList("[data-support-tickets-list]", supportTickets.data, renderSupportTicketRow, "No support tickets yet.");
     if (!supportTicketsCache.length && supportThread) {
@@ -1249,6 +1263,126 @@
     setField(profileForm, "email", profile.email || currentUser?.email || "");
     setField(profileForm, "telegram_username", profile.telegram_username || "");
     setField(profileForm, "referral_code", profile.referral_code || "");
+  }
+
+  function renderClientProfileDashboard(data) {
+    const profile = data.profile || currentProfile || {};
+    const activeSubscriptions = (data.subscriptions || []).filter((subscription) => ["active", "trial"].includes(subscription.status));
+    const latestDeposit = (data.deposits || [])[0];
+    const referralRows = data.referrals || [];
+    const availableReferral = referralRows
+      .filter((item) => item.commission_status === "available")
+      .reduce((sum, item) => sum + Number(item.commission_amount || 0), 0);
+
+    setText("[data-profile-display-name]", profile.full_name || profile.email || currentUser?.email || "ETX Client");
+    setText("[data-profile-display-email]", profile.email || currentUser?.email || "No email");
+    setText("[data-profile-display-telegram]", profile.telegram_username || "Not set");
+    setText("[data-profile-display-referral]", profile.referral_code || "Pending");
+    setText("[data-profile-wallet-balance]", formatMoney(Number(profile.wallet_balance || walletBalance || 0), "USD"));
+    setText("[data-profile-active-count]", String(activeSubscriptions.length));
+    setText("[data-profile-active-detail]", activeSubscriptions[0] ? `${activeSubscriptions[0].products?.name || "ETX Product"} active` : "No active access yet");
+    setText("[data-profile-referral-earnings]", formatMoney(availableReferral, "USD"));
+    setText("[data-profile-referral-detail]", `${referralRows.length} referral record${referralRows.length === 1 ? "" : "s"}`);
+    setText("[data-profile-latest-deposit]", latestDeposit ? formatStatus(latestDeposit.status) : "None");
+    setText("[data-profile-latest-deposit-detail]", latestDeposit ? `${formatMoney(latestDeposit.wallet_credit_amount || latestDeposit.amount || 0, "USD")} / ${formatDate(latestDeposit.created_at)}` : "No top-up yet");
+
+    renderListElement(profileActiveSubscriptions, activeSubscriptions, renderProfileAccessRow, "No active subscriptions yet.");
+    renderListElement(profileRecentActivity, buildProfileActivityRows(data), renderProfileActivityRow, "Recent activity will appear here.");
+    renderProfileReferralSnapshot(referralRows, availableReferral);
+  }
+
+  function renderProfileAccessRow(subscription) {
+    const product = subscription.products?.name || "ETX Product";
+    const plan = subscription.plans?.name || "Plan";
+    const days = daysUntil(subscription.expires_at);
+    const expiry = subscription.expires_at ? `${days} day${days === 1 ? "" : "s"} left` : "No expiry";
+
+    return `
+      <div class="profile-access-row">
+        <div>
+          <strong>${escapeHtml(product)}</strong>
+          <span>${escapeHtml(plan)} - ${escapeHtml(formatStatus(subscription.status))}</span>
+        </div>
+        <b>${escapeHtml(expiry)}</b>
+      </div>
+    `;
+  }
+
+  function buildProfileActivityRows(data) {
+    const rows = [
+      ...(data.deposits || []).map((deposit) => ({
+        at: deposit.created_at,
+        type: "Deposit",
+        title: formatMoney(deposit.wallet_credit_amount || deposit.amount || 0, "USD"),
+        detail: `${formatStatus(deposit.status)} / ${deposit.transaction_reference || "No reference"}`,
+      })),
+      ...(data.orders || []).map((order) => ({
+        at: order.created_at,
+        type: "Order",
+        title: order.plans?.products?.name || order.plans?.name || "ETX Order",
+        detail: `${formatMoney(order.total_amount || 0, order.currency || "USD")} / ${formatStatus(order.status)}`,
+      })),
+      ...(data.subscriptions || []).map((subscription) => ({
+        at: subscription.created_at || subscription.starts_at,
+        type: "Subscription",
+        title: subscription.products?.name || subscription.plans?.name || "ETX Access",
+        detail: `${formatStatus(subscription.status)} until ${formatDate(subscription.expires_at)}`,
+      })),
+      ...(data.supportTickets || []).map((ticket) => ({
+        at: ticket.updated_at || ticket.created_at,
+        type: "Support",
+        title: ticket.subject || "Support Ticket",
+        detail: formatStatus(ticket.status),
+      })),
+      ...(data.notifications || []).map((notification) => ({
+        at: notification.created_at,
+        type: "Notice",
+        title: notification.title || "Notification",
+        detail: notification.body || formatStatus(notification.status),
+      })),
+    ];
+
+    return rows
+      .filter((item) => item.at)
+      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+      .slice(0, 8);
+  }
+
+  function renderProfileActivityRow(item) {
+    return `
+      <div class="profile-activity-row">
+        <span>${escapeHtml(item.type)}</span>
+        <div>
+          <strong>${escapeHtml(item.title)}</strong>
+          <small>${escapeHtml(item.detail)} - ${formatDate(item.at)}</small>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderProfileReferralSnapshot(referrals, availableReferral) {
+    if (!profileReferralSnapshot) return;
+
+    const convertedRows = referrals.filter((item) => ["available", "requested", "approved", "paid"].includes(item.commission_status));
+    const latestRows = referrals.slice(0, 4).map((item, index) => {
+      const referredClient = `Referral ${index + 1}`;
+      return `
+        <div class="profile-referral-row">
+          <span>${escapeHtml(referredClient)}</span>
+          <b>${escapeHtml(formatMoney(item.commission_amount || 0, "USD"))}</b>
+          <small>${escapeHtml(formatStatus(item.commission_status))} - ${formatDate(item.created_at)}</small>
+        </div>
+      `;
+    }).join("");
+
+    profileReferralSnapshot.innerHTML = `
+      <div class="profile-referral-summary">
+        <div><span>Total Invites</span><strong>${referrals.length}</strong></div>
+        <div><span>Conversions</span><strong>${convertedRows.length}</strong></div>
+        <div><span>Available</span><strong>${formatMoney(availableReferral, "USD")}</strong></div>
+      </div>
+      ${latestRows || `<p class="codebox">No referral activity yet.</p>`}
+    `;
   }
 
   function renderAdminGate(user) {
