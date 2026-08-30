@@ -70,6 +70,11 @@
   const clientNextActions = document.querySelector("[data-client-next-actions]");
   const walletPurchaseButton = document.querySelector("[data-wallet-purchase]");
   const walletReferralCode = document.querySelector("[data-wallet-referral-code]");
+  const planModal = document.querySelector("[data-plan-modal]");
+  const planModalClose = document.querySelector("[data-plan-modal-close]");
+  const planModalPurchase = document.querySelector("[data-plan-modal-purchase]");
+  const planModalDeposit = document.querySelector("[data-plan-modal-deposit]");
+  const planModalReferralCode = document.querySelector("[data-plan-modal-referral-code]");
   const walletTransactionsList = document.querySelector("[data-wallet-transactions-list]");
   const depositRequestsList = document.querySelector("[data-deposit-requests-list]");
   const commissionForm = document.querySelector("[data-commission-form]");
@@ -368,9 +373,9 @@
   }
 
   function bindWalletPurchase() {
-    if (!walletPurchaseButton) return;
+    if (!walletPurchaseButton && !planModalPurchase) return;
 
-    walletPurchaseButton.addEventListener("click", async () => {
+    const buyWithWallet = async () => {
       if (!currentUser) {
         setStatus("Please sign in before buying a plan.", "warn");
         return;
@@ -390,7 +395,7 @@
 
       const { data, error } = await client.rpc("purchase_plan_with_wallet", {
         target_plan_id: currentPlan.id,
-        referral_code: String(walletReferralCode?.value || referredByCode || "").trim().toUpperCase() || null,
+        referral_code: String(planModalReferralCode?.value || walletReferralCode?.value || referredByCode || "").trim().toUpperCase() || null,
       });
 
       if (error) {
@@ -410,8 +415,24 @@
 
       setStatus("Plan purchased using wallet balance. Subscription is active.", "ok");
       setClientFlow("subscription", "Congratulations. Your subscription is now active and reflected in your account.");
+      closePlanModal();
       goToTab("subscriptions");
       await hydrateClientData();
+    };
+
+    walletPurchaseButton?.addEventListener("click", buyWithWallet);
+    planModalPurchase?.addEventListener("click", buyWithWallet);
+    planModalClose?.addEventListener("click", closePlanModal);
+    planModal?.addEventListener("click", (event) => {
+      if (event.target === planModal) closePlanModal();
+    });
+    planModalDeposit?.addEventListener("click", () => {
+      closePlanModal();
+      goToTab("payments");
+      setClientFlow("payment", "Deposit funds first. Products can only be purchased using approved wallet balance.");
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closePlanModal();
     });
   }
 
@@ -858,7 +879,7 @@
       return;
     }
 
-    dynamicPlanGrid.innerHTML = data.map(renderPlanCard).join("");
+    dynamicPlanGrid.innerHTML = renderGroupedPlans(data);
     dynamicPlanGrid.querySelectorAll("[data-select-plan]").forEach((button) => {
       button.addEventListener("click", () => {
         const plan = data.find((item) => item.id === button.dataset.selectPlan);
@@ -870,6 +891,11 @@
           price_amount: Number(plan.price_amount),
           currency: plan.currency,
           product_name: plan.products?.name || "ETX Product",
+          product_code: plan.products?.code || "ETX",
+          category: formatCategory(plan.products?.category || plan.products?.name || "ETX Trading Tools"),
+          duration_days: Number(plan.duration_days || 0),
+          bonus_days: Number(plan.bonus_days || 0),
+          is_trial: Boolean(plan.is_trial),
         };
 
         if (selectedPlan) {
@@ -882,6 +908,7 @@
 
         setStatus("Plan selected. Buy with wallet balance or deposit funds first.", "ok");
         setClientFlow("payment", "Plan selected. Use approved wallet balance to buy, or deposit funds first.");
+        openPlanModal(currentPlan);
       });
     });
   }
@@ -1077,8 +1104,13 @@
       return;
     }
 
-    const account = method.account_number ? method.account_number : "Admin will provide the final account details.";
-    const meta = [method.account_name, method.network].filter(Boolean).join(" / ");
+    const account = method.account_number ? method.account_number : "Account details not configured yet.";
+    const accountTone = method.account_number ? "" : "warn";
+    const metaRows = [
+      ["Account Name", method.account_name || "ETX Finance"],
+      [method.type === "crypto" ? "Wallet Address" : "Account / Mobile Number", account],
+      ["Network", method.network || (method.type === "crypto" ? "Confirm network before sending" : "Not required")],
+    ];
     const paidCurrency = getDepositCurrency(method);
     const currencyNote = paidCurrency === "PHP" ? `Enter PHP amount. Platform rate: ${formatRate(getPlatformRate())} PHP per USD.` : "Enter USDT amount. Wallet credit is 1:1 USD.";
     const qr = method.qr_image_url
@@ -1086,11 +1118,12 @@
       : "";
 
     paymentMethodDetails.innerHTML = `
-      <strong>${escapeHtml(method.name)}</strong>
-      <span>${escapeHtml(meta || method.type)}</span>
-      <span>${escapeHtml(account)}</span>
+      <strong>Send funds to: ${escapeHtml(method.name)}</strong>
+      <div class="method-data-list">
+        ${metaRows.map(([label, value]) => `<span><small>${escapeHtml(label)}</small><b class="${label.includes("Account / Mobile") || label.includes("Wallet") ? accountTone : ""}">${escapeHtml(value)}</b></span>`).join("")}
+      </div>
       <span>${escapeHtml(currencyNote)}</span>
-      <small>${escapeHtml(method.instructions || "Send exact top-up amount, then upload proof for verification.")}</small>
+      <small>${escapeHtml(method.instructions || "Send the exact top-up amount, then upload proof with a visible reference number.")}</small>
       ${qr}
     `;
   }
@@ -2311,6 +2344,40 @@
       .replace(/^_+|_+$/g, "");
   }
 
+  function renderGroupedPlans(plans) {
+    if (!plans?.length) {
+      return `<article class="panel"><h3>No active ETX tools yet</h3><p>Active plans will appear here once configured by admin.</p></article>`;
+    }
+
+    const groups = plans.reduce((items, plan) => {
+      const product = plan.products || {};
+      const key = formatCategory(product.category || product.name || "ETX Trading Tools");
+      items[key] = items[key] || [];
+      items[key].push(plan);
+      return items;
+    }, {});
+
+    return Object.entries(groups)
+      .map(([category, items]) => `
+        <section class="tool-category">
+          <div class="tool-category-header">
+            <span>${escapeHtml(category)}</span>
+            <small>${items.length} plan${items.length > 1 ? "s" : ""}</small>
+          </div>
+          <div class="tool-category-grid">
+            ${items.map(renderPlanCard).join("")}
+          </div>
+        </section>
+      `)
+      .join("");
+  }
+
+  function formatCategory(category) {
+    return String(category || "ETX Trading Tools")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
   function renderPlanCard(plan) {
     const product = plan.products || {};
     const duration = plan.bonus_days ? `${plan.duration_days} days + ${plan.bonus_days} bonus` : `${plan.duration_days} days`;
@@ -2325,6 +2392,46 @@
         <button class="primary-btn wide" type="button" data-select-plan="${escapeHtml(plan.id)}">Select Plan</button>
       </article>
     `;
+  }
+
+  function openPlanModal(plan) {
+    if (!planModal || !plan) return;
+
+    const duration = plan.bonus_days ? `${plan.duration_days} days + ${plan.bonus_days} bonus` : `${plan.duration_days} days`;
+    const price = plan.is_trial ? "Free Trial" : formatMoney(Number(plan.price_amount), plan.currency);
+    const hasEnoughBalance = plan.is_trial || walletBalance >= Number(plan.price_amount || 0);
+    const status = hasEnoughBalance ? "Ready to subscribe" : "Deposit required";
+
+    setText("[data-plan-modal-category]", plan.category || "ETX Trading Tools");
+    setText("[data-plan-modal-title]", `${plan.product_name} / ${plan.name}`);
+    setText("[data-plan-modal-summary]", `${plan.product_name} access with ${plan.name}. Review your wallet balance before confirming.`);
+    setText("[data-plan-modal-price]", price);
+    setText("[data-plan-modal-duration]", duration);
+    setText("[data-plan-modal-wallet]", formatMoney(walletBalance, "USD"));
+    setText("[data-plan-modal-status]", status);
+    setText("[data-plan-modal-note]", hasEnoughBalance
+      ? "Your subscription will activate immediately after successful wallet purchase."
+      : "Deposit funds first and wait for admin approval before subscribing.");
+
+    if (planModalPurchase) {
+      planModalPurchase.disabled = !hasEnoughBalance;
+      planModalPurchase.textContent = hasEnoughBalance ? "Subscribe Now" : "Insufficient Balance";
+    }
+
+    if (planModalReferralCode && !planModalReferralCode.value && referredByCode) {
+      planModalReferralCode.value = referredByCode;
+    }
+
+    planModal.classList.remove("hidden");
+    planModal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("modal-open");
+  }
+
+  function closePlanModal() {
+    if (!planModal) return;
+    planModal.classList.add("hidden");
+    planModal.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("modal-open");
   }
 
   function renderOrderRow(order) {

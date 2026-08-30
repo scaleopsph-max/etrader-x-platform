@@ -75,10 +75,11 @@
         <strong>Client Side</strong>
         <button class="active" data-tab="overview">Overview</button>
         <button data-tab="profile">Profile</button>
-        <button data-tab="buy">Subscribe / Buy</button>
+        <button data-tab="buy">ETX Trading Tools</button>
         <button data-tab="payments">Wallet / Deposit</button>
         <button data-tab="subscriptions">Subscriptions</button>
         <button data-tab="referrals">Referral</button>
+        <button data-tab="about">About ETrader-X</button>
         <button data-tab="support">Support</button>
         <div class="sidebar-account">
           <small>Signed in as</small>
@@ -155,14 +156,14 @@
 
         <div class="portal-tab" id="buy">
           <div class="page-heading">
-            <p class="eyebrow">Subscribe</p>
-            <h2>Choose your ETX plan</h2>
-            <p>Select a package and buy using approved wallet balance.</p>
+            <p class="eyebrow">ETX Trading Tools</p>
+            <h2>Choose your access plan</h2>
+            <p>Browse by product category, review the details, then subscribe using approved wallet balance.</p>
           </div>
           <div class="buy-grid" data-dynamic-plans>
             <article class="panel"><h3>Loading plans...</h3><p>Fetching ETX products from Supabase.</p></article>
           </div>
-          <article class="panel order-panel">
+          <article class="panel order-panel selected-order-panel">
             <h3>Selected Order</h3>
             <p class="codebox" id="selected-plan">No selected product yet.</p>
             <div class="mini-form">
@@ -192,7 +193,7 @@
                 </label>
                 <div class="method-details" data-payment-method-details>
                   <strong>Select payment method</strong>
-                  <span>Admin-managed payment instructions will appear here.</span>
+                  <span>Official ETX receiving details will appear here after selecting a method.</span>
                 </div>
                 <label>
                   Deposit Reference
@@ -290,6 +291,29 @@
           </div>
         </div>
 
+        <div class="portal-tab" id="about">
+          <div class="page-heading">
+            <p class="eyebrow">About ETrader-X</p>
+            <h2>Private trading access built for ETX clients.</h2>
+            <p>ETrader-X gives clients one secure place to manage deposits, wallet balance, trading tools, subscriptions, referrals, and support.</p>
+          </div>
+          <div class="content-grid">
+            <article class="panel">
+              <h3>What ETX Provides</h3>
+              <div class="row"><span>Trading tools and indicators</span><b class="ok">Available</b></div>
+              <div class="row"><span>Expert Advisor access</span><b class="ok">Available</b></div>
+              <div class="row"><span>VIP signal subscriptions</span><b class="ok">Available</b></div>
+              <div class="row"><span>Academy and support workflow</span><b class="warn">Managed</b></div>
+            </article>
+            <article class="panel">
+              <h3>Client Standard</h3>
+              <p>Deposit first, wait for admin verification, then subscribe using your approved USD wallet balance.</p>
+              <p class="codebox">Trading involves risk. ETX tools support analysis and workflow discipline, but they do not guarantee profit.</p>
+              <button class="primary-btn wide" type="button" data-jump="buy">View ETX Trading Tools</button>
+            </article>
+          </div>
+        </div>
+
         <div class="portal-tab" id="support">
           <div class="page-heading">
             <p class="eyebrow">Support</p>
@@ -328,6 +352,30 @@
         </div>
       </section>
     </main>
+
+    <div class="modal-backdrop hidden" data-plan-modal aria-hidden="true">
+      <section class="glass-modal" role="dialog" aria-modal="true" aria-labelledby="plan-modal-title">
+        <button class="modal-close" type="button" data-plan-modal-close aria-label="Close plan details">x</button>
+        <p class="eyebrow" data-plan-modal-category>ETX Trading Tools</p>
+        <h2 id="plan-modal-title" data-plan-modal-title>Plan details</h2>
+        <p data-plan-modal-summary>Review the selected plan before subscribing.</p>
+        <div class="modal-detail-grid">
+          <div><span>Price</span><strong data-plan-modal-price>$0.00</strong></div>
+          <div><span>Duration</span><strong data-plan-modal-duration>--</strong></div>
+          <div><span>Wallet Balance</span><strong data-plan-modal-wallet>$0.00</strong></div>
+          <div><span>Status</span><strong data-plan-modal-status>Ready</strong></div>
+        </div>
+        <p class="codebox" data-plan-modal-note>Subscription activates after wallet purchase succeeds.</p>
+        <label class="modal-referral-field">
+          Referral Code
+          <input type="text" data-plan-modal-referral-code placeholder="Optional" />
+        </label>
+        <div class="form-actions">
+          <button class="danger-btn" type="button" data-plan-modal-purchase>Subscribe Now</button>
+          <button class="secondary-btn" type="button" data-plan-modal-deposit>Deposit Funds</button>
+        </div>
+      </section>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/dist/umd/supabase.min.js"></script>
     <script src="supabase-config.js"></script>
