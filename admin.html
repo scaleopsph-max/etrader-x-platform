@@ -79,6 +79,7 @@
         <button data-tab="admin-referrals">Referrals</button>
         <button data-tab="admin-support">Support</button>
         <button data-tab="admin-reports">Reports</button>
+        <button data-tab="admin-audit" data-admin-write-only>Audit Logs</button>
         <button data-tab="admin-roles" data-super-user-only>Roles</button>
         <div class="sidebar-account">
           <small>Signed in as</small>
@@ -409,6 +410,37 @@
             <div class="row"><span>Deposit queue</span><button class="secondary-btn" type="button" data-report-export="payments">Export CSV</button></div>
             <div class="row"><span>Subscriptions</span><button class="secondary-btn" type="button" data-report-export="subscriptions">Export CSV</button></div>
             <div class="row"><span>Commission ledger</span><button class="secondary-btn" type="button" data-report-export="commissions">Export CSV</button></div>
+          </article>
+        </div>
+
+        <div class="portal-tab" id="admin-audit">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">Audit trail</p>
+            <h2>Admin activity logs</h2>
+            <p>Review who changed products, rates, deposits, subscriptions, support, and withdrawals.</p>
+          </div>
+          <article class="panel report-filter-panel">
+            <h3>Audit Filters</h3>
+            <div class="form-grid">
+              <label>Date Range<select data-audit-range><option value="all">All time</option><option value="today">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></label>
+              <label>Action<select data-audit-action><option value="all">All actions</option></select></label>
+              <label>Entity<select data-audit-entity><option value="all">All entities</option></select></label>
+              <label>Search<input type="search" data-audit-search placeholder="Actor, action, entity, metadata" /></label>
+            </div>
+          </article>
+          <div class="stat-grid">
+            <article><span>Filtered Logs</span><strong data-audit-count>0</strong><small>Matching activity</small></article>
+            <article><span>Rate Changes</span><strong data-audit-rate-count>0</strong><small>Conversion updates</small></article>
+            <article><span>Deposit Actions</span><strong data-audit-deposit-count>0</strong><small>Approvals/rejections</small></article>
+          </div>
+          <article class="panel">
+            <div class="panel-title-row">
+              <h3>Activity Ledger</h3>
+              <button class="secondary-btn compact-btn" type="button" data-audit-export>Export CSV</button>
+            </div>
+            <div data-admin-audit-list>
+              <p class="codebox">Audit logs load after sign in.</p>
+            </div>
           </article>
         </div>
 

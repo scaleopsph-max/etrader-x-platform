@@ -48,6 +48,12 @@
   const reportDepositsList = document.querySelector("[data-report-deposits-list]");
   const reportSubscriptionsList = document.querySelector("[data-report-subscriptions-list]");
   const reportReferralsList = document.querySelector("[data-report-referrals-list]");
+  const auditRangeFilter = document.querySelector("[data-audit-range]");
+  const auditActionFilter = document.querySelector("[data-audit-action]");
+  const auditEntityFilter = document.querySelector("[data-audit-entity]");
+  const auditSearchFilter = document.querySelector("[data-audit-search]");
+  const adminAuditList = document.querySelector("[data-admin-audit-list]");
+  const auditExportButton = document.querySelector("[data-audit-export]");
   const adminClientsList = document.querySelector("[data-admin-clients-list]");
   const adminSubscriptionsList = document.querySelector("[data-admin-subscriptions-list]");
   const adminExpiringList = document.querySelector("[data-admin-expiring-list]");
@@ -112,6 +118,7 @@
   let availableCommission = 0;
   let walletBalance = 0;
   let adminReportSnapshot = null;
+  let auditLogsCache = [];
   let supportTicketsCache = [];
   const referredByCode = getReferralCode();
   let lastClientSnapshot = {
@@ -139,6 +146,8 @@
     bindAdminRoleForm();
     bindReportFilters();
     bindReportExports();
+    bindAuditFilters();
+    bindAuditExport();
     bindSignOut();
     await refreshSession();
     await loadPlans();
@@ -599,12 +608,16 @@
           created_by: currentUser.id,
         };
 
-        const { error } = await client.from("products").upsert(payload, { onConflict: "code" });
+        const { data: product, error } = await client.from("products").upsert(payload, { onConflict: "code" }).select("id").single();
         if (error) {
           setStatus(error.message, "warn");
           return;
         }
 
+        await logAdminAction("product.saved", "products", product?.id || null, {
+          code: payload.code,
+          status: payload.status,
+        });
         adminProductForm.reset();
         setStatus("Product saved.", "ok");
         await loadAdminData();
@@ -629,12 +642,18 @@
           status: String(form.get("status") || "active"),
         };
 
-        const { error } = await client.from("plans").insert(payload);
+        const { data: plan, error } = await client.from("plans").insert(payload).select("id").single();
         if (error) {
           setStatus(error.message, "warn");
           return;
         }
 
+        await logAdminAction("plan.created", "plans", plan?.id || null, {
+          product_id: payload.product_id,
+          price_amount: payload.price_amount,
+          currency: payload.currency,
+          status: payload.status,
+        });
         adminPlanForm.reset();
         setStatus("Plan created.", "ok");
         await loadAdminData();
@@ -662,12 +681,17 @@
           created_by: currentUser.id,
         };
 
-        const { error } = await client.from("payment_methods").upsert(payload, { onConflict: "method_key" });
+        const { data: method, error } = await client.from("payment_methods").upsert(payload, { onConflict: "method_key" }).select("id").single();
         if (error) {
           setStatus(error.message, "warn");
           return;
         }
 
+        await logAdminAction("payment_method.saved", "payment_methods", method?.id || null, {
+          method_key: payload.method_key,
+          status: payload.status,
+          type: payload.type,
+        });
         adminPaymentMethodForm.reset();
         setStatus("Payment method saved.", "ok");
         await loadPaymentMethods();
@@ -742,7 +766,13 @@
       hydrateExchangeRateForm();
       renderExchangeRateSummary();
       renderDepositEstimate();
-      await logAdminAction("exchange_rate.updated", "exchange_rates", null);
+      await logAdminAction("exchange_rate.updated", "exchange_rates", null, {
+        quote_currency: payload.quote_currency,
+        live_rate: payload.live_rate,
+        markup_amount: payload.markup_amount,
+        manual_rate: payload.manual_rate,
+        final_rate: data.final_rate,
+      });
       setStatus("Conversion rate saved.", "ok");
       await loadAdminData();
     });
@@ -764,12 +794,16 @@
         created_by: currentUser.id,
       };
 
-      const { error } = await client.from("admin_roles").upsert(payload, { onConflict: "role_key" });
+      const { data: role, error } = await client.from("admin_roles").upsert(payload, { onConflict: "role_key" }).select("id").single();
       if (error) {
         setStatus(error.message, "warn");
         return;
       }
 
+      await logAdminAction("role.saved", "admin_roles", role?.id || null, {
+        role_key: payload.role_key,
+        name: payload.name,
+      });
       adminRoleForm.reset();
       setStatus("Role saved. Assign the matching app_metadata role after final permission mapping.", "ok");
       await loadAdminRoles();
@@ -1225,8 +1259,15 @@
     if (!requireAdmin(false)) return;
 
     const roleRequest = hasSuperUserAccess() ? client.from("admin_roles").select("*").order("sort_order", { ascending: true }) : Promise.resolve({ data: [], error: null });
+    const auditRequest = hasAdminWriteAccess()
+      ? client
+        .from("audit_logs")
+        .select("*,actor:profiles!audit_logs_actor_id_fkey(full_name,email,role)")
+        .order("created_at", { ascending: false })
+        .limit(150)
+      : Promise.resolve({ data: [], error: null });
 
-    const [products, plans, paymentMethods, payments, deposits, walletTransactions, referrals, commissionRequests, supportTickets, subscriptions, orders, profiles, notifications, roles, exchangeRates] = await Promise.all([
+    const [products, plans, paymentMethods, payments, deposits, walletTransactions, referrals, commissionRequests, supportTickets, subscriptions, orders, profiles, notifications, roles, exchangeRates, auditLogs] = await Promise.all([
       client.from("products").select("*").order("sort_order", { ascending: true }),
       client.from("plans").select("*,products(name,code)").order("created_at", { ascending: false }),
       client.from("payment_methods").select("*").order("sort_order", { ascending: true }),
@@ -1283,10 +1324,11 @@
         .limit(20),
       roleRequest,
       client.from("exchange_rates").select("*").eq("quote_currency", "PHP").maybeSingle(),
+      auditRequest,
     ]);
 
-    if (products.error || plans.error || paymentMethods.error || payments.error || deposits.error || walletTransactions.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error || profiles.error || notifications.error || roles.error || exchangeRates.error) {
-      setStatus(products.error?.message || plans.error?.message || paymentMethods.error?.message || payments.error?.message || deposits.error?.message || walletTransactions.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message || profiles.error?.message || notifications.error?.message || roles.error?.message || exchangeRates.error?.message, "warn");
+    if (products.error || plans.error || paymentMethods.error || payments.error || deposits.error || walletTransactions.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error || profiles.error || notifications.error || roles.error || exchangeRates.error || auditLogs.error) {
+      setStatus(products.error?.message || plans.error?.message || paymentMethods.error?.message || payments.error?.message || deposits.error?.message || walletTransactions.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message || profiles.error?.message || notifications.error?.message || roles.error?.message || exchangeRates.error?.message || auditLogs.error?.message, "warn");
       return;
     }
 
@@ -1309,6 +1351,8 @@
     renderListElement(adminNotificationsList, notifications.data, renderAdminNotificationRow, "No notifications yet.");
     renderListElement(adminRolesList, roles.data, renderAdminRoleRow, "No custom roles yet.");
     updateBadge(adminNotificationBadge, (notifications.data || []).filter((notification) => notification.status === "unread").length);
+    auditLogsCache = auditLogs.data || [];
+    renderAuditLogs();
     hydrateAdminProductOptions(products.data || []);
     bindAdminPaymentActions();
     bindAdminPaymentMethodActions();
@@ -1387,6 +1431,108 @@
         if (adminReportSnapshot) renderAdminReports(adminReportSnapshot);
       });
     });
+  }
+
+  function bindAuditFilters() {
+    [auditRangeFilter, auditActionFilter, auditEntityFilter, auditSearchFilter].forEach((control) => {
+      if (!control) return;
+      control.addEventListener("input", renderAuditLogs);
+      control.addEventListener("change", renderAuditLogs);
+    });
+  }
+
+  function bindAuditExport() {
+    if (!auditExportButton) return;
+    auditExportButton.addEventListener("click", () => {
+      if (!requireAdminWrite()) return;
+      downloadCsv("etx-audit-logs.csv", buildAuditExportRows(getFilteredAuditLogs()));
+      setStatus("Audit logs exported.", "ok");
+    });
+  }
+
+  function renderAuditLogs() {
+    hydrateAuditFilters();
+    const logs = getFilteredAuditLogs();
+    setText("[data-audit-count]", String(logs.length));
+    setText("[data-audit-rate-count]", String(logs.filter((log) => log.action === "exchange_rate.updated").length));
+    setText("[data-audit-deposit-count]", String(logs.filter((log) => log.entity_table === "deposit_requests").length));
+    renderListElement(adminAuditList, logs.slice(0, 40), renderAuditLogRow, "No audit logs match these filters.");
+  }
+
+  function hydrateAuditFilters() {
+    hydrateAuditSelect(auditActionFilter, auditLogsCache.map((log) => log.action));
+    hydrateAuditSelect(auditEntityFilter, auditLogsCache.map((log) => log.entity_table));
+  }
+
+  function hydrateAuditSelect(select, values) {
+    if (!select) return;
+    const label = select === auditActionFilter ? "All actions" : "All entities";
+    const currentValue = select.value || "all";
+    const options = [...new Set(values.filter(Boolean))].sort();
+    select.innerHTML = [`<option value="all">${label}</option>`, ...options.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(formatStatus(value))}</option>`)].join("");
+    select.value = options.includes(currentValue) ? currentValue : "all";
+  }
+
+  function getFilteredAuditLogs() {
+    const range = auditRangeFilter?.value || "all";
+    const action = auditActionFilter?.value || "all";
+    const entity = auditEntityFilter?.value || "all";
+    const search = String(auditSearchFilter?.value || "").trim().toLowerCase();
+
+    return auditLogsCache.filter((log) => {
+      const rangeOk = isWithinReportRange(log.created_at, range);
+      const actionOk = action === "all" || log.action === action;
+      const entityOk = entity === "all" || log.entity_table === entity;
+      const searchOk = !search || auditSearchText(log).includes(search);
+      return rangeOk && actionOk && entityOk && searchOk;
+    });
+  }
+
+  function auditSearchText(log) {
+    return [
+      log.action,
+      log.entity_table,
+      log.entity_id,
+      log.actor?.email,
+      log.actor?.full_name,
+      log.actor?.role,
+      JSON.stringify(log.metadata || {}),
+    ].filter(Boolean).join(" ").toLowerCase();
+  }
+
+  function renderAuditLogRow(log) {
+    const actor = log.actor?.email || log.actor?.full_name || "System";
+    const metadata = summarizeMetadata(log.metadata);
+    return `
+      <div class="row report-row">
+        <span>${escapeHtml(formatStatus(log.action))} <small>${escapeHtml(actor)} / ${escapeHtml(log.entity_table)} / ${escapeHtml(formatDateTime(log.created_at))}${metadata ? ` / ${escapeHtml(metadata)}` : ""}</small></span>
+        <b>${escapeHtml(shortId(log.entity_id))}</b>
+      </div>
+    `;
+  }
+
+  function summarizeMetadata(metadata) {
+    if (!metadata || typeof metadata !== "object") return "";
+    return Object.entries(metadata)
+      .filter(([, value]) => value !== null && value !== undefined && value !== "")
+      .slice(0, 4)
+      .map(([key, value]) => `${formatStatus(key)}: ${String(value)}`)
+      .join(" / ");
+  }
+
+  function buildAuditExportRows(logs) {
+    return [
+      ["Actor", "Role", "Action", "Entity", "Entity ID", "Metadata", "Created At"],
+      ...logs.map((log) => [
+        log.actor?.email || log.actor?.full_name || "",
+        log.actor?.role || "",
+        log.action || "",
+        log.entity_table || "",
+        log.entity_id || "",
+        JSON.stringify(log.metadata || {}),
+        log.created_at || "",
+      ]),
+    ];
   }
 
   function renderAdminReports(snapshot) {
@@ -1728,7 +1874,11 @@
       return;
     }
 
-    await logAdminAction(`commission.${status}`, "commission_requests", requestId);
+    await logAdminAction(`commission.${status}`, "commission_requests", requestId, {
+      status,
+      next_referral_status: nextReferralStatus,
+      client_id: request.client_id,
+    });
     await createNotification({
       recipientId: request.client_id,
       title: status === "approved" ? "Withdrawal approved" : "Withdrawal rejected",
@@ -1792,7 +1942,10 @@
           return;
         }
 
-        await logAdminAction("support.reply", "support_tickets", ticketId);
+        await logAdminAction("support.reply", "support_tickets", ticketId, {
+          subject: ticket.subject,
+          client_id: ticket.client_id,
+        });
         await createNotification({
           recipientId: ticket.client_id,
           title: "Support replied",
@@ -1874,7 +2027,11 @@
       return;
     }
 
-    await logAdminAction(`support.${status}`, "support_tickets", ticketId);
+    await logAdminAction(`support.${status}`, "support_tickets", ticketId, {
+      status,
+      subject: ticket.subject,
+      client_id: ticket.client_id,
+    });
     await createNotification({
       recipientId: ticket.client_id,
       title: "Support ticket updated",
@@ -1894,7 +2051,7 @@
       return;
     }
 
-    await logAdminAction(`${table}.${status}`, table, id);
+    await logAdminAction(`${table}.${status}`, table, id, { status });
     setStatus(`${table.slice(0, -1)} marked as ${status}.`, "ok");
     await loadAdminData();
     await loadPlans();
@@ -1936,7 +2093,10 @@
       return;
     }
 
-    await logAdminAction("deposit.approved", "deposit_requests", deposit.id);
+    await logAdminAction("deposit.approved", "deposit_requests", deposit.id, {
+      wallet_credit_amount: approvedCredit,
+      has_review_note: Boolean(reviewNotes),
+    });
     await createNotification({
       recipientId: deposit.client_id,
       title: "Deposit approved",
@@ -1975,7 +2135,9 @@
       return;
     }
 
-    await logAdminAction("deposit.rejected", "deposit_requests", depositId);
+    await logAdminAction("deposit.rejected", "deposit_requests", depositId, {
+      has_review_note: Boolean(reviewNotes),
+    });
     await createNotification({
       recipientId: deposit.client_id,
       title: "Deposit needs correction",
@@ -2006,12 +2168,17 @@
     window.open(data.signedUrl, "_blank", "noopener");
   }
 
-  async function logAdminAction(action, entityTable, entityId) {
+  async function logAdminAction(action, entityTable, entityId, metadata = {}) {
     await client.from("audit_logs").insert({
       actor_id: currentUser.id,
       action,
       entity_table: entityTable,
       entity_id: entityId,
+      metadata: {
+        actor_email: currentUser.email || currentProfile?.email || null,
+        actor_role: currentUser.app_metadata?.role || currentProfile?.role || null,
+        ...metadata,
+      },
     });
   }
 
@@ -2692,6 +2859,12 @@
 
   function formatDateTime(value) {
     return value ? new Date(value).toLocaleString() : "Just now";
+  }
+
+  function shortId(value) {
+    if (!value) return "n/a";
+    const text = String(value);
+    return text.length > 8 ? text.slice(0, 8) : text;
   }
 
   function daysUntil(value) {
