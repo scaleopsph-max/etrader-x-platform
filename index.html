@@ -9,6 +9,8 @@
     content="Yugo Ashi Indicator for MT5 by ETrader-X helps traders read trend bias, identify possible confirmations, and subscribe through a secure ETX client portal."
   />
   <link rel="stylesheet" href="assets/css/landing.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/dist/umd/supabase.min.js" defer></script>
+  <script src="supabase-config.js" defer></script>
   <script src="assets/js/landing.js" defer></script>
 </head>
 
@@ -39,20 +41,20 @@
     <section class="hero-section" id="hero">
       <div class="container hero-container">
         <div class="hero-content">
-          <p class="eyebrow">Yugo Ashi Indicator for MT5</p>
-          <h1>Trade With More Clarity, Structure, and Confirmation</h1>
-          <p class="hero-subtitle">
+          <p class="eyebrow" data-creative="hero.eyebrow">Yugo Ashi Indicator for MT5</p>
+          <h1 data-creative="hero.title">Trade With More Clarity, Structure, and Confirmation</h1>
+          <p class="hero-subtitle" data-creative="hero.subtitle">
             A trading decision-support tool designed to help traders read trend bias,
             spot possible confirmations, and plan trades with better structure.
           </p>
-          <p class="hero-description">
+          <p class="hero-description" data-creative="hero.body">
             If you are tired of guessing whether to buy, sell, or wait, Yugo Ashi helps
             simplify market reading through cleaner visual guidance for trend direction,
             signals, support and resistance, and trade planning.
           </p>
 
           <div class="hero-actions">
-            <a class="btn btn-primary" href="client.html" data-cta="hero_avail">
+            <a class="btn btn-primary" href="client.html" data-cta="hero_avail" data-creative="hero.cta">
               Avail Yugo Ashi Now
             </a>
             <a class="btn btn-secondary" href="#plans" data-cta="hero_plans">
@@ -73,6 +75,7 @@
               src="assets/images/yugo-ashi-dashboard-preview.png"
               alt="Yugo Ashi Indicator MT5 chart preview"
               class="hero-image"
+              data-creative="hero.image"
             />
           </div>
         </div>
@@ -202,26 +205,37 @@
     <section class="promo-section" id="promo">
       <div class="container promo-container">
         <div class="promo-content">
-          <p class="eyebrow">Limited Promo</p>
-          <h2>Get 50% Off Yugo Ashi Access</h2>
-          <p>
+          <p class="eyebrow" data-creative="promo.eyebrow">Limited Promo</p>
+          <h2 data-creative="promo.title">Get 50% Off Yugo Ashi Access</h2>
+          <p data-creative="promo.body">
             For a limited time, you can avail Yugo Ashi access with a special promo
             discount. Submit your order through the ETX client portal for verification.
           </p>
         </div>
 
         <div class="countdown-card" aria-label="Promo countdown">
-          <p class="countdown-label">Promo ends in:</p>
+          <p class="countdown-label" data-creative="promo.subtitle">Promo ends in:</p>
           <div class="countdown-timer" id="countdown-timer" data-deadline="2026-12-31T23:59:59+08:00">
             <div class="countdown-item"><span id="days">00</span><small>Days</small></div>
             <div class="countdown-item"><span id="hours">00</span><small>Hours</small></div>
             <div class="countdown-item"><span id="minutes">00</span><small>Minutes</small></div>
             <div class="countdown-item"><span id="seconds">00</span><small>Seconds</small></div>
           </div>
-          <a class="btn btn-primary" href="client.html" data-cta="promo_claim">
+          <a class="btn btn-primary" href="client.html" data-cta="promo_claim" data-creative="promo.cta">
             Claim Promo Access
           </a>
         </div>
+      </div>
+    </section>
+
+    <section class="dynamic-promos-section" id="dynamic-promos" hidden>
+      <div class="container">
+        <div class="section-heading center">
+          <p class="eyebrow">ETX Updates</p>
+          <h2>Current and Upcoming Promos</h2>
+          <p>Admin-managed ETX creatives, announcements, and limited offers.</p>
+        </div>
+        <div class="dynamic-promos-grid" data-creative-list="promos"></div>
       </div>
     </section>
 
@@ -374,14 +388,14 @@
 
     <section class="final-cta-section" id="final-cta">
       <div class="container narrow-container center">
-        <p class="eyebrow">Start With Structure</p>
-        <h2>Start Reading the Market With More Clarity</h2>
-        <p>
+        <p class="eyebrow" data-creative="final_cta.eyebrow">Start With Structure</p>
+        <h2 data-creative="final_cta.title">Start Reading the Market With More Clarity</h2>
+        <p data-creative="final_cta.body">
           Yugo Ashi is designed to help you simplify market analysis, improve
           confirmation-based decisions, and trade with better planning.
         </p>
         <div class="final-cta-actions">
-          <a class="btn btn-primary" href="client.html" data-cta="final_avail">Create Client Account</a>
+          <a class="btn btn-primary" href="client.html" data-cta="final_avail" data-creative="final_cta.cta">Create Client Account</a>
           <a class="btn btn-secondary" href="#plans" data-cta="final_best_plan">Compare Access Plans</a>
         </div>
       </div>

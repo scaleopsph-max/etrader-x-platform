@@ -681,6 +681,65 @@ ul {
   font-weight: 800;
 }
 
+/* ---------- Dynamic Promos ---------- */
+
+.dynamic-promos-section {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(225, 33, 33, 0.18), transparent 34%),
+    linear-gradient(180deg, var(--black), var(--black-2));
+}
+
+.dynamic-promos-section[hidden] {
+  display: none;
+}
+
+.dynamic-promos-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.dynamic-promo-card {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  border: 1px solid rgba(244, 189, 79, 0.18);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02)),
+    rgba(10, 10, 14, 0.86);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  padding: 18px;
+}
+
+.dynamic-promo-card img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.dynamic-promo-card h3 {
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+}
+
+.dynamic-promo-card p {
+  margin-top: 10px;
+}
+
+.dynamic-promo-card small {
+  display: block;
+  margin-top: 12px;
+  color: var(--gold);
+  font-weight: 800;
+}
+
+.dynamic-promo-card .btn {
+  margin-top: 18px;
+}
+
 /* ---------- Pricing ---------- */
 
 .pricing-section {
@@ -1010,6 +1069,10 @@ ul {
   .pricing-grid {
     grid-template-columns: repeat(3, 1fr);
     align-items: stretch;
+  }
+
+  .dynamic-promos-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .process-steps {
