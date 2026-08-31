@@ -8,6 +8,9 @@
 - RLS is enabled on all public tables.
 - Anonymous table access is restricted to public `products` and `plans`.
 - Private client/admin tables require authenticated access plus RLS ownership/admin policies.
+- Public table grants are least-privilege:
+  - `anon`: read-only access to public catalog, landing creatives, and active PAM FAQ rows.
+  - `authenticated`: only the CRUD verbs required by client/admin workflows.
 - Payment proofs use a private Supabase Storage bucket with MIME and file-size limits.
 - Admin authorization uses `app_metadata.role = admin`, not user-editable metadata.
 - Mock client/subscription data was removed from admin UI.
@@ -17,6 +20,8 @@
   - SUPER USER: full operations plus role registry.
   - ADMIN: full operations except role registry.
   - MANAGER: view/report/support access only.
+- Sensitive RPC functions revoke `PUBLIC`/`anon` execution and are only executable by authenticated users after in-function role checks.
+- Module 37B mobile overflow checks passed across client/admin portal tabs at 320px, 360px, 390px, and 768px widths.
 
 ## Required Supabase Dashboard Toggle
 

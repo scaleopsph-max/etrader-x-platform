@@ -19,6 +19,8 @@ Premium landing page and MVP framework for the ETrader-X trading products platfo
 - Private Supabase Storage bucket for payment proofs
 - Security headers for Cloudflare Pages
 - Restricted anonymous database access for private tables
+- Least-privilege public table grants for Supabase Data API access
+- Full mobile overflow QA pass for client/admin portal tabs
 
 ## Planned Stack
 
@@ -50,6 +52,7 @@ Imported landing assets live under `assets/`. Public CTAs are connected to the E
 - Expenses ledger and financial reports
 - PAM the Trading Assistant with admin-managed FAQ knowledge
 - Mobile-first portal polish
+- Supabase RLS and grants hardening
 
 ## Database Framework
 
@@ -58,5 +61,6 @@ Auth/profile policies and database hardening live in the follow-up migration fil
 Payment proof storage and admin CRUD permissions are added in the Module 7/8 migrations.
 Role registry foundation is added in the Module 15 migrations. The Module 16 permission matrix grants SUPER USER and ADMIN full operations access, while MANAGER is limited to view/report/support workflows.
 PAM FAQ knowledge is managed in `pam_faq_entries` with public active reads and admin-only writes.
+Module 36 tightened table/function grants so RLS remains backed by least-privilege Data API access.
 See `docs/database-framework.md` for the table map and security model.
 See `docs/production-security.md` for the pre-launch hardening checklist.

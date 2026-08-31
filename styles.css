@@ -2250,16 +2250,16 @@ textarea {
   }
 
   .flow-tracker {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     margin-right: -10px;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: thin;
+    overflow: visible;
+    padding-bottom: 0;
   }
 
   .flow-tracker span {
-    flex: 0 0 152px;
+    min-width: 0;
     min-height: 54px;
   }
 
@@ -2281,14 +2281,14 @@ textarea {
   }
 
   .pam-quick-actions {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 4px;
-    scrollbar-width: thin;
+    flex-wrap: wrap;
+    overflow: visible;
+    padding-bottom: 0;
   }
 
   .pam-quick-actions button {
-    flex: 0 0 auto;
+    flex: 1 1 132px;
+    min-width: 0;
   }
 
   .ai-chat-form {
