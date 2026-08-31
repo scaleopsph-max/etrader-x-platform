@@ -265,6 +265,11 @@
             <h2>Payment verification</h2>
             <p>Review wallet top-up proofs, approve valid deposits, or request correction.</p>
           </div>
+          <div class="stat-grid review-queue-summary" data-admin-deposit-queue-summary>
+            <article><span>Needs Review</span><strong data-admin-deposit-review-count>0</strong><small>Pending top-ups</small></article>
+            <article><span>Pending Credit</span><strong data-admin-deposit-review-usd>$0.00</strong><small>Estimated USD wallet credit</small></article>
+            <article><span>Approved</span><strong data-admin-deposit-approved-count>0</strong><small>Finalized deposits</small></article>
+          </div>
           <article class="panel">
             <h3>Deposit Approval Queue</h3>
             <label class="review-note-control">Review Notes<textarea id="admin-review-notes" placeholder="Optional note for approval or rejection. This will be included in the client notification."></textarea></label>
@@ -272,6 +277,15 @@
               <p class="codebox">Sign in as admin to load deposit queue.</p>
             </div>
             <p class="codebox" id="admin-action-log">No deposit action selected yet.</p>
+          </article>
+          <article class="panel">
+            <div class="panel-title-row">
+              <h3>Wallet Ledger Trail</h3>
+              <button class="secondary-btn compact-btn" type="button" data-jump="admin-audit">Audit Logs</button>
+            </div>
+            <div data-admin-wallet-ledger>
+              <p class="codebox">Wallet ledger loads after sign in.</p>
+            </div>
           </article>
         </div>
 

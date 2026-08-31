@@ -33,7 +33,9 @@
   const adminPlansList = document.querySelector("[data-admin-plans-list]");
   const adminPaymentMethodsList = document.querySelector("[data-admin-payment-methods-list]");
   const adminPaymentQueue = document.querySelector("[data-admin-payment-queue]");
+  const adminWalletLedger = document.querySelector("[data-admin-wallet-ledger]");
   const adminReviewNotes = document.getElementById("admin-review-notes");
+  const adminActionLog = document.getElementById("admin-action-log");
   const adminPlanProductSelect = document.querySelector("[data-admin-plan-product]");
   const adminReferralList = document.querySelector("[data-admin-referral-list]");
   const adminCommissionQueue = document.querySelector("[data-admin-commission-queue]");
@@ -1585,7 +1587,7 @@
     renderListElement(adminProductsList, products.data, renderAdminProductRow, "No products yet.");
     renderListElement(adminPlansList, plans.data, renderAdminPlanRow, "No plans yet.");
     renderListElement(adminPaymentMethodsList, paymentMethods.data, renderAdminPaymentMethodRow, "No payment methods yet.");
-    renderListElement(adminPaymentQueue, deposits.data, renderDepositReviewCard, "No deposits in queue.");
+    renderAdminDepositQueue(deposits.data || [], walletTransactions.data || []);
     renderListElement(adminReferralList, referrals.data, renderAdminReferralRow, "No referral records yet.");
     renderListElement(adminCommissionQueue, commissionRequests.data, renderCommissionReviewCard, "No withdrawal requests yet.");
     const dataSnapshot = {
@@ -1632,11 +1634,31 @@
     renderPaymentMethodOptions();
   }
 
+  function renderAdminDepositQueue(deposits, walletTransactions) {
+    const reviewStatuses = ["pending", "under_review"];
+    const reviewable = deposits.filter((deposit) => reviewStatuses.includes(deposit.status));
+    const finalized = deposits.filter((deposit) => !reviewStatuses.includes(deposit.status));
+    const orderedDeposits = [...reviewable, ...finalized];
+    const pendingCredit = reviewable.reduce((sum, deposit) => sum + Number(deposit.wallet_credit_amount || deposit.amount || 0), 0);
+
+    setText("[data-admin-deposit-review-count]", String(reviewable.length));
+    setText("[data-admin-deposit-review-usd]", formatMoney(pendingCredit, "USD"));
+    setText("[data-admin-deposit-approved-count]", String(deposits.filter((deposit) => deposit.status === "approved").length));
+
+    renderListElement(adminPaymentQueue, orderedDeposits, renderDepositReviewCard, "No deposits in queue.");
+    renderListElement(adminWalletLedger, walletTransactions.slice(0, 12), renderAdminWalletLedgerRow, "No wallet ledger activity yet.");
+  }
+
   function bindAdminPaymentActions() {
-    document.querySelectorAll("[data-admin-approve], [data-admin-reject], [data-proof-path], [data-admin-product-status], [data-admin-plan-status]").forEach((button) => {
+    document.querySelectorAll("[data-admin-approve], [data-admin-reject], [data-proof-path], [data-deposit-audit], [data-admin-product-status], [data-admin-plan-status]").forEach((button) => {
       if (button.dataset.bound === "true") return;
       button.dataset.bound = "true";
       button.addEventListener("click", async () => {
+        if (button.hasAttribute("data-deposit-audit")) {
+          focusDepositAudit(button.dataset.depositAudit);
+          return;
+        }
+
         if (button.hasAttribute("data-proof-path")) {
           if (!requireAdmin()) return;
           await withButtonLoading(button, "Opening...", () => openProof(button.dataset.proofPath));
@@ -1774,6 +1796,16 @@
     setText("[data-audit-rate-count]", String(logs.filter((log) => log.action === "exchange_rate.updated").length));
     setText("[data-audit-deposit-count]", String(logs.filter((log) => log.entity_table === "deposit_requests").length));
     renderListElement(adminAuditList, logs.slice(0, 40), renderAuditLogRow, "No audit logs match these filters.");
+  }
+
+  function focusDepositAudit(depositId) {
+    if (auditSearchFilter) auditSearchFilter.value = depositId || "";
+    if (auditEntityFilter && [...auditEntityFilter.options].some((option) => option.value === "deposit_requests")) {
+      auditEntityFilter.value = "deposit_requests";
+    }
+    renderAuditLogs();
+    goToTab("admin-audit");
+    setStatus("Audit trail filtered for selected deposit.", "ok");
   }
 
   function hydrateAuditFilters() {
@@ -2765,6 +2797,10 @@
       entityId: deposit.id,
     });
     clearAdminReviewNotes();
+    if (adminActionLog) {
+      adminActionLog.textContent = `Deposit approved. Wallet credited ${formatMoney(approvedCredit, "USD")} and ledger updated.`;
+      adminActionLog.className = "codebox ok";
+    }
     setStatus("Deposit approved and wallet balance credited.", "ok");
     await loadAdminData();
   }
@@ -2806,6 +2842,10 @@
       entityId: depositId,
     });
     clearAdminReviewNotes();
+    if (adminActionLog) {
+      adminActionLog.textContent = "Deposit rejected. Client was notified to submit corrected details.";
+      adminActionLog.className = "codebox warn";
+    }
     setStatus("Deposit rejected.", "ok");
     await loadAdminData();
   }
@@ -3412,6 +3452,7 @@
 
   function renderDepositReviewCard(deposit) {
     const clientName = deposit.profiles?.full_name || deposit.profiles?.email || "Client";
+    const clientEmail = deposit.profiles?.email || "No email";
     const methodName = deposit.payment_methods?.name || formatStatus(deposit.method || "deposit");
     const proofMeta = [deposit.proof_file_name, formatFileSize(deposit.proof_file_size), deposit.proof_file_type].filter(Boolean).join(" / ");
     const reviewNote = deposit.review_notes ? `<p>Review note: ${escapeHtml(deposit.review_notes)}</p>` : "";
@@ -3424,30 +3465,47 @@
     const proofButton = deposit.proof_path
       ? `<button class="secondary-btn" type="button" data-proof-path="${escapeHtml(deposit.proof_path)}" data-deposit-id="${escapeHtml(deposit.id)}">View Proof</button>`
       : `<span class="warn">No file</span>`;
-    const canReview = deposit.status === "under_review" && hasAdminWriteAccess();
+    const canReview = ["pending", "under_review"].includes(deposit.status) && hasAdminWriteAccess();
     const reviewButtons = canReview
       ? `
         <label class="compact-field">USD Credit<input type="number" min="0.01" step="0.01" value="${escapeHtml(walletCredit)}" data-admin-credit-amount data-deposit-id="${escapeHtml(deposit.id)}" /></label>
         <button class="primary-btn" type="button" data-admin-approve data-deposit-id="${escapeHtml(deposit.id)}">Approve</button>
         <button class="secondary-btn" type="button" data-admin-reject data-deposit-id="${escapeHtml(deposit.id)}">Reject</button>
       `
-      : `<span class="${deposit.status === "approved" ? "ok" : deposit.status === "rejected" ? "rejected" : "warn"}">${escapeHtml(deposit.status === "under_review" ? "Review only" : "Final")}</span>`;
+      : `<span class="review-final-badge ${statusClass(deposit.status)}">${escapeHtml(deposit.status === "approved" ? "Credited final" : deposit.status === "rejected" ? "Correction requested" : "View only")}</span>`;
+    const reviewedDate = deposit.reviewed_at ? `<p>Reviewed: ${escapeHtml(formatDateTime(deposit.reviewed_at))}</p>` : "";
 
     return `
-      <div class="approval-card" data-deposit-card="${escapeHtml(deposit.id)}">
+      <div class="approval-card deposit-review-card ${canReview ? "review-open" : "review-final"}" data-deposit-card="${escapeHtml(deposit.id)}">
         <div>
           <strong>${escapeHtml(clientName)}</strong>
+          <p>${escapeHtml(clientEmail)} / ${escapeHtml(formatDateTime(deposit.created_at))}</p>
           <p>Paid: ${escapeHtml(formatMoney(paidAmount, paidCurrency))}</p>
           <p>Wallet credit: ${escapeHtml(formatMoney(walletCredit, "USD"))}</p>
           ${conversionMeta}
           <p>Method: ${escapeHtml(methodName)}</p>
           <p>Ref: ${escapeHtml(deposit.transaction_reference || "No reference")}</p>
           <p>Proof: ${escapeHtml(proofMeta || "No metadata")}</p>
+          ${reviewedDate}
           ${reviewNote}
         </div>
-        <span class="${deposit.status === "approved" ? "ok" : deposit.status === "rejected" ? "rejected" : "warn"}">${escapeHtml(deposit.status)}</span>
+        <span class="${statusClass(deposit.status)}">${escapeHtml(formatStatus(deposit.status))}</span>
         ${proofButton}
+        <button class="secondary-btn" type="button" data-deposit-audit="${escapeHtml(deposit.id)}">Audit</button>
         ${reviewButtons}
+      </div>
+    `;
+  }
+
+  function renderAdminWalletLedgerRow(transaction) {
+    const clientName = transaction.profiles?.full_name || transaction.profiles?.email || "Client";
+    const sign = transaction.direction === "credit" ? "+" : "-";
+    const related = [transaction.related_table, shortId(transaction.related_id)].filter(Boolean).join(" / ");
+
+    return `
+      <div class="row report-row wallet-ledger-row">
+        <span>${escapeHtml(clientName)} <small>${escapeHtml(transaction.description || formatStatus(transaction.type))} / ${escapeHtml(formatDateTime(transaction.created_at))}${related ? ` / ${escapeHtml(related)}` : ""}</small></span>
+        <b class="${transaction.direction === "credit" ? "ok" : "warn"}">${sign}${escapeHtml(formatMoney(Number(transaction.amount || 0), transaction.currency || "USD"))} <small>Bal ${escapeHtml(formatMoney(Number(transaction.balance_after || 0), transaction.currency || "USD"))}</small></b>
       </div>
     `;
   }
