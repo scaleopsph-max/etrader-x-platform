@@ -56,6 +56,8 @@
   const reportSearchFilter = document.querySelector("[data-report-search]");
   const reportFinancialStatement = document.querySelector("[data-report-financial-statement]");
   const reportWalletReconciliation = document.querySelector("[data-report-wallet-reconciliation]");
+  const reportSourceNote = document.querySelector("[data-report-source]");
+  const reportPrintButton = document.querySelector("[data-report-print]");
   const reportDepositsList = document.querySelector("[data-report-deposits-list]");
   const reportSubscriptionsList = document.querySelector("[data-report-subscriptions-list]");
   const reportReferralsList = document.querySelector("[data-report-referrals-list]");
@@ -107,6 +109,7 @@
   const notificationBadge = document.querySelector("[data-notification-badge]");
   const notificationButton = document.querySelector("[data-notification-button]");
   const markNotificationsReadButton = document.querySelector("[data-mark-notifications-read]");
+  const enableNotificationButtons = document.querySelectorAll("[data-enable-notifications]");
   const aiChatForm = document.querySelector("[data-ai-chat-form]");
   const aiChatMessages = document.querySelector("[data-ai-chat-messages]");
   const MAX_PROOF_SIZE = 8 * 1024 * 1024;
@@ -151,6 +154,13 @@
   let landingCreativesCache = [];
   let auditLogsCache = [];
   let supportTicketsCache = [];
+  let realtimeChannels = [];
+  let realtimeKey = "";
+  let clientRealtimeRefreshTimer = null;
+  let adminRealtimeRefreshTimer = null;
+  let reportRenderToken = 0;
+  let latestTrustedFinancialSummary = null;
+  let latestTrustedReportKey = "";
   const referredByCode = getReferralCode();
   let lastClientSnapshot = {
     hasPendingPayment: false,
@@ -178,6 +188,7 @@
     bindAdminRoleForm();
     bindExpenseForm();
     bindReportFilters();
+    bindReportPrint();
     bindReportExports();
     bindAuditFilters();
     bindAuditExport();
@@ -196,6 +207,7 @@
     const { data, error } = await client.auth.getUser();
 
     if (error || !data.user) {
+      resetRealtimeSubscriptions();
       currentUser = null;
       currentProfile = null;
       renderSignedOut();
@@ -209,6 +221,7 @@
     await loadPaymentMethods();
     await hydrateClientData();
     renderAdminGate(data.user);
+    setupRealtimeSubscriptions(data.user);
   }
 
   function bindAuthForms() {
@@ -504,8 +517,23 @@
   }
 
   function bindNotificationActions() {
-    if (!markNotificationsReadButton) return;
-    markNotificationsReadButton.addEventListener("click", markClientNotificationsRead);
+    markNotificationsReadButton?.addEventListener("click", markClientNotificationsRead);
+    enableNotificationButtons.forEach((button) => {
+      button.addEventListener("click", requestBrowserNotificationPermission);
+    });
+    syncNotificationPermissionUi();
+  }
+
+  function bindReportPrint() {
+    if (!reportPrintButton) return;
+
+    reportPrintButton.addEventListener("click", () => {
+      if (!requireAdmin()) return;
+      document.body.classList.add("printing-report");
+      setStatus("Opening printable financial report.", "ok");
+      window.print();
+      window.setTimeout(() => document.body.classList.remove("printing-report"), 800);
+    });
   }
 
   function bindCommissionForm() {
@@ -2028,6 +2056,10 @@
   }
 
   function renderAdminReports(snapshot) {
+    const renderToken = ++reportRenderToken;
+    const reportKey = getReportContextKey();
+    latestTrustedFinancialSummary = null;
+    latestTrustedReportKey = reportKey;
     hydrateReportMethodFilter(snapshot.paymentMethods || []);
     const filtered = filterReportSnapshot(snapshot);
     const pendingDeposits = filtered.deposits.filter((deposit) => ["pending", "under_review"].includes(deposit.status));
@@ -2082,6 +2114,7 @@
 
     renderFinancialStatement(financialSummary);
     renderWalletReconciliation(financialSummary);
+    setReportSource("Local fallback rendered. Verifying secured Supabase summary...", "warn");
 
     renderListElement(
       reportDepositsList,
@@ -2110,6 +2143,8 @@
       renderReportExpenseRow,
       "No expenses match these filters."
     );
+
+    hydrateTrustedFinancialSummary(reportKey, renderToken, financialSummary);
   }
 
   function buildFinancialSummary(snapshot) {
@@ -2171,6 +2206,76 @@
     reportWalletReconciliation.innerHTML = rows.map(renderStatementRow).join("");
   }
 
+  async function hydrateTrustedFinancialSummary(reportKey, renderToken, fallbackSummary) {
+    const trustedSummary = await loadTrustedFinancialSummary(fallbackSummary);
+    if (!trustedSummary || reportTokenExpired(reportKey, renderToken)) {
+      if (!trustedSummary) setReportSource("Local fallback active. Secured Supabase summary is unavailable right now.", "warn");
+      return;
+    }
+
+    latestTrustedFinancialSummary = trustedSummary;
+    latestTrustedReportKey = reportKey;
+    renderFinancialStatement(trustedSummary);
+    renderWalletReconciliation(trustedSummary);
+    setReportSource(`Secured Supabase summary verified ${formatDateTime(trustedSummary.generatedAt)}.`, "ok");
+  }
+
+  async function loadTrustedFinancialSummary(fallbackSummary) {
+    if (typeof client.rpc !== "function" || !requireAdmin(false)) return null;
+
+    const period = getReportPeriod();
+    const { data, error } = await client.rpc("get_admin_financial_summary", {
+      p_from: period.from,
+      p_to: period.to,
+      p_status: reportStatusFilter?.value || "all",
+      p_method: reportMethodFilter?.value || "all",
+      p_search: String(reportSearchFilter?.value || "").trim(),
+    });
+
+    if (error) {
+      console.warn("Trusted financial summary unavailable", error);
+      return null;
+    }
+
+    return normalizeFinancialSummary(data, fallbackSummary);
+  }
+
+  function normalizeFinancialSummary(data, fallbackSummary = {}) {
+    const source = data || {};
+    return {
+      ...fallbackSummary,
+      source: source.source || "server",
+      generatedAt: source.generated_at || source.generatedAt || new Date().toISOString(),
+      grossRevenue: Number(source.grossRevenue ?? fallbackSummary.grossRevenue ?? 0),
+      approvedDeposits: Number(source.approvedDeposits ?? fallbackSummary.approvedDeposits ?? 0),
+      pendingDeposits: Number(source.pendingDeposits ?? fallbackSummary.pendingDeposits ?? 0),
+      referralCommissions: Number(source.referralCommissions ?? fallbackSummary.referralCommissions ?? 0),
+      approvedExpenses: Number(source.approvedExpenses ?? fallbackSummary.approvedExpenses ?? 0),
+      netProfit: Number(source.netProfit ?? fallbackSummary.netProfit ?? 0),
+      walletCreditTotal: Number(source.walletCreditTotal ?? fallbackSummary.walletCreditTotal ?? 0),
+      walletDebitTotal: Number(source.walletDebitTotal ?? fallbackSummary.walletDebitTotal ?? 0),
+      expectedWalletBalance: Number(source.expectedWalletBalance ?? fallbackSummary.expectedWalletBalance ?? 0),
+      loadedWalletBalance: Number(source.loadedWalletBalance ?? fallbackSummary.loadedWalletBalance ?? 0),
+      walletVariance: Number(source.walletVariance ?? fallbackSummary.walletVariance ?? 0),
+      approvedExpenseCount: Number(source.approvedExpenseCount ?? fallbackSummary.approvedExpenseCount ?? 0),
+      commissionCount: Number(source.commissionCount ?? fallbackSummary.commissionCount ?? 0),
+      approvedPaymentCount: Number(source.approvedPaymentCount ?? fallbackSummary.approvedPaymentCount ?? 0),
+      approvedDepositCount: Number(source.approvedDepositCount ?? fallbackSummary.approvedDepositCount ?? 0),
+      pendingDepositCount: Number(source.pendingDepositCount ?? fallbackSummary.pendingDepositCount ?? 0),
+      activeSubscriptionCount: Number(source.activeSubscriptionCount ?? fallbackSummary.activeSubscriptionCount ?? 0),
+    };
+  }
+
+  function reportTokenExpired(reportKey, renderToken) {
+    return reportKey !== getReportContextKey() || renderToken !== reportRenderToken;
+  }
+
+  function setReportSource(message, tone = "") {
+    if (!reportSourceNote) return;
+    reportSourceNote.textContent = message;
+    reportSourceNote.className = `proof-note${tone ? ` ${tone}` : ""}`;
+  }
+
   function renderStatementRow([label, value, note, tone]) {
     return `
       <div class="row statement-row">
@@ -2178,6 +2283,45 @@
         <b class="${escapeHtml(tone || "")}">${escapeHtml(value)}</b>
       </div>
     `;
+  }
+
+  function getReportPeriod() {
+    const range = reportRangeFilter?.value || "all";
+    const now = new Date();
+
+    if (range === "today") {
+      const start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      return { from: start.toISOString(), to: end.toISOString() };
+    }
+
+    const days = Number(range || 0);
+    if (days > 0) {
+      return { from: new Date(now.getTime() - days * 86400000).toISOString(), to: null };
+    }
+
+    return { from: null, to: null };
+  }
+
+  function getReportContextKey() {
+    return JSON.stringify({
+      range: reportRangeFilter?.value || "all",
+      status: reportStatusFilter?.value || "all",
+      method: reportMethodFilter?.value || "all",
+      search: String(reportSearchFilter?.value || "").trim().toLowerCase(),
+    });
+  }
+
+  function getCurrentFinancialSummary(snapshot) {
+    return latestTrustedFinancialSummary && latestTrustedReportKey === getReportContextKey()
+      ? latestTrustedFinancialSummary
+      : buildFinancialSummary(snapshot);
+  }
+
+  function selectedOptionText(select, fallback) {
+    return select?.selectedOptions?.[0]?.textContent || fallback;
   }
 
   function hydrateReportMethodFilter(methods) {
@@ -2321,8 +2465,8 @@
         }
 
         const type = button.dataset.reportExport;
-        const rows = buildExportRows(type, getFilteredReportSnapshot() || adminReportSnapshot);
-        downloadCsv(`etx-${type}-report.csv`, rows);
+        const rows = withReportMetadata(type, buildExportRows(type, getFilteredReportSnapshot() || adminReportSnapshot));
+        downloadCsv(`etx-${type}-report-${reportFileStamp()}.csv`, rows);
         setStatus(`${type} report exported.`, "ok");
       });
     });
@@ -2340,7 +2484,7 @@
 
   function buildExportRows(type, snapshot) {
     if (type === "financial") {
-      const summary = buildFinancialSummary(snapshot);
+      const summary = getCurrentFinancialSummary(snapshot);
       return [
         ["Metric", "Amount USD", "Notes"],
         ["Gross revenue", summary.grossRevenue, "Approved wallet purchases"],
@@ -2433,6 +2577,40 @@
         order.created_at || "",
       ]),
     ];
+  }
+
+  function withReportMetadata(type, rows) {
+    const source = latestTrustedFinancialSummary && latestTrustedReportKey === getReportContextKey()
+      ? "Secured Supabase RPC"
+      : "Client fallback";
+
+    return [
+      ["Report", reportTitle(type)],
+      ["Generated At", new Date().toISOString()],
+      ["Date Range", selectedOptionText(reportRangeFilter, "All time")],
+      ["Status Filter", selectedOptionText(reportStatusFilter, "All statuses")],
+      ["Method Filter", selectedOptionText(reportMethodFilter, "All methods")],
+      ["Search", String(reportSearchFilter?.value || "").trim() || "None"],
+      ["Summary Source", source],
+      [],
+      ...rows,
+    ];
+  }
+
+  function reportTitle(type) {
+    const titles = {
+      financial: "Financial Statement",
+      sales: "Sales Summary",
+      payments: "Deposit Queue",
+      subscriptions: "Subscriptions",
+      commissions: "Commission Ledger",
+      expenses: "Expenses Ledger",
+    };
+    return titles[type] || "Operations Report";
+  }
+
+  function reportFileStamp() {
+    return new Date().toISOString().slice(0, 10);
   }
 
   function buildPriorityRows({ pendingPayments, pendingCommissionRequests, openSupport, renewalsDue }) {
@@ -3226,6 +3404,183 @@
     });
   }
 
+  function setupRealtimeSubscriptions(user) {
+    if (!user || typeof client.channel !== "function") return;
+
+    const nextKey = `${user.id}:${String(user.app_metadata?.role || "client").toLowerCase()}`;
+    if (realtimeKey === nextKey) return;
+
+    resetRealtimeSubscriptions();
+    realtimeKey = nextKey;
+
+    const clientChannel = client
+      .channel(`etx-client-notifications-${user.id}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "notifications",
+        filter: `recipient_id=eq.${user.id}`,
+      }, (payload) => handleClientRealtimeNotification(payload.new))
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "notifications",
+        filter: `recipient_id=eq.${user.id}`,
+      }, () => queueClientRealtimeRefresh())
+      .subscribe(handleRealtimeStatus);
+
+    realtimeChannels.push(clientChannel);
+
+    if (!hasAdminAccess(user)) return;
+
+    const adminNotificationChannel = client
+      .channel("etx-admin-notification-feed")
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "notifications",
+      }, (payload) => handleAdminRealtimeNotification(payload.new))
+      .subscribe(handleRealtimeStatus);
+
+    const adminOpsChannel = client
+      .channel("etx-admin-operations-feed")
+      .on("postgres_changes", { event: "*", schema: "public", table: "deposit_requests" }, () => queueAdminRealtimeRefresh("Deposit queue updated."))
+      .on("postgres_changes", { event: "*", schema: "public", table: "commission_requests" }, () => queueAdminRealtimeRefresh("Commission queue updated."))
+      .on("postgres_changes", { event: "*", schema: "public", table: "support_tickets" }, () => queueAdminRealtimeRefresh("Support queue updated."))
+      .on("postgres_changes", { event: "*", schema: "public", table: "support_replies" }, () => queueAdminRealtimeRefresh("Support replies updated."))
+      .on("postgres_changes", { event: "*", schema: "public", table: "subscriptions" }, () => queueAdminRealtimeRefresh("Subscription records updated."))
+      .on("postgres_changes", { event: "*", schema: "public", table: "payments" }, () => queueAdminRealtimeRefresh("Payment records updated."))
+      .on("postgres_changes", { event: "*", schema: "public", table: "wallet_transactions" }, () => queueAdminRealtimeRefresh("Wallet ledger updated."))
+      .subscribe(handleRealtimeStatus);
+
+    realtimeChannels.push(adminNotificationChannel, adminOpsChannel);
+  }
+
+  function resetRealtimeSubscriptions() {
+    realtimeChannels.forEach((channel) => {
+      try {
+        if (typeof client.removeChannel === "function") {
+          client.removeChannel(channel);
+        } else if (typeof channel.unsubscribe === "function") {
+          channel.unsubscribe();
+        }
+      } catch (error) {
+        console.warn("Realtime unsubscribe failed", error);
+      }
+    });
+    realtimeChannels = [];
+    realtimeKey = "";
+    window.clearTimeout(clientRealtimeRefreshTimer);
+    window.clearTimeout(adminRealtimeRefreshTimer);
+  }
+
+  function handleRealtimeStatus(status) {
+    if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) {
+      console.warn(`Realtime channel status: ${status}`);
+    }
+  }
+
+  function handleClientRealtimeNotification(notification) {
+    if (!notification) return;
+    const tone = notificationTone(notification);
+    showToast(`${notification.title}: ${notification.message}`, tone);
+    showBrowserNotification(notification.title, notification.message);
+    queueClientRealtimeRefresh();
+  }
+
+  function handleAdminRealtimeNotification(notification) {
+    if (!notification || notification.recipient_id === currentUser?.id) return;
+    showToast(`New client notification: ${notification.title}`, "info");
+    queueAdminRealtimeRefresh();
+  }
+
+  function queueClientRealtimeRefresh() {
+    if (!currentUser) return;
+    window.clearTimeout(clientRealtimeRefreshTimer);
+    clientRealtimeRefreshTimer = window.setTimeout(() => {
+      hydrateClientData();
+    }, 500);
+  }
+
+  function queueAdminRealtimeRefresh(message) {
+    if (message && hasAdminAccess()) showToast(message, "info");
+    if (!hasAdminAccess()) return;
+
+    window.clearTimeout(adminRealtimeRefreshTimer);
+    adminRealtimeRefreshTimer = window.setTimeout(() => {
+      loadAdminData();
+    }, 700);
+  }
+
+  async function requestBrowserNotificationPermission() {
+    if (!("Notification" in window)) {
+      setStatus("Browser notifications are not supported on this device.", "warn");
+      return;
+    }
+
+    if (Notification.permission === "granted") {
+      setStatus("Browser alerts are already enabled.", "ok");
+      syncNotificationPermissionUi();
+      return;
+    }
+
+    if (Notification.permission === "denied") {
+      setStatus("Browser alerts are blocked. Enable notifications in browser settings to receive pop-up alerts.", "warn");
+      syncNotificationPermissionUi();
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    setStatus(permission === "granted" ? "Browser alerts enabled." : "Browser alerts were not enabled.", permission === "granted" ? "ok" : "warn");
+    syncNotificationPermissionUi();
+  }
+
+  function syncNotificationPermissionUi() {
+    enableNotificationButtons.forEach((button) => {
+      if (!("Notification" in window)) {
+        button.textContent = "Alerts Unavailable";
+        button.disabled = true;
+        return;
+      }
+
+      if (Notification.permission === "granted") {
+        button.textContent = "Alerts On";
+        button.disabled = true;
+        return;
+      }
+
+      if (Notification.permission === "denied") {
+        button.textContent = "Alerts Blocked";
+        button.disabled = true;
+        return;
+      }
+
+      button.textContent = "Enable Alerts";
+      button.disabled = false;
+    });
+  }
+
+  function showBrowserNotification(title, message) {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+    try {
+      new Notification(title, {
+        body: message,
+        tag: `etx-${title}`,
+        silent: false,
+      });
+    } catch (error) {
+      console.warn("Browser notification failed", error);
+    }
+  }
+
+  function notificationTone(notification) {
+    const text = `${notification.title || ""} ${notification.message || ""} ${notification.category || ""}`.toLowerCase();
+    if (text.includes("reject") || text.includes("correction") || text.includes("blocked")) return "warn";
+    if (text.includes("approved") || text.includes("active") || text.includes("earned")) return "ok";
+    return "info";
+  }
+
   async function createNotification({ recipientId, title, message, category = "system", entityTable = null, entityId = null }) {
     if (!recipientId || !title || !message) return null;
 
@@ -3293,6 +3648,9 @@
     if (!target) return;
     target.textContent = String(count);
     target.classList.toggle("hidden", count <= 0);
+    if (target === notificationBadge) {
+      notificationButton?.classList.toggle("has-unread", count > 0);
+    }
   }
 
   function requireAdmin(showMessage = true) {

@@ -125,7 +125,10 @@
             <article class="panel">
               <div class="panel-title-row">
                 <h3>Notification Center</h3>
-                <span class="nav-badge hidden" data-admin-notification-badge>0</span>
+                <div class="panel-title-actions">
+                  <button class="secondary-btn compact-btn" type="button" data-enable-notifications>Enable Alerts</button>
+                  <span class="nav-badge hidden" data-admin-notification-badge>0</span>
+                </div>
               </div>
               <div data-admin-notifications-list>
                 <p class="codebox">Notifications load after sign in.</p>
@@ -485,13 +488,17 @@
             <p>Review revenue, wallet movement, commissions, expenses, and net profit.</p>
           </div>
           <article class="panel report-filter-panel">
-            <h3>Report Filters</h3>
+            <div class="panel-title-row">
+              <h3>Report Filters</h3>
+              <button class="secondary-btn compact-btn" type="button" data-report-print>Print Report</button>
+            </div>
             <div class="form-grid">
               <label>Date Range<select data-report-range><option value="all">All time</option><option value="today">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></label>
               <label>Status<select data-report-status><option value="all">All statuses</option><option value="under_review">Under review</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="active">Active</option><option value="draft">Draft</option><option value="voided">Voided</option><option value="available">Available</option><option value="requested">Requested</option><option value="paid">Paid</option></select></label>
               <label>Method<select data-report-method><option value="all">All methods</option></select></label>
               <label>Search<input type="search" data-report-search placeholder="Client, product, reference, code" /></label>
             </div>
+            <p class="proof-note" data-report-source>Reports use local fallback until the secured Supabase summary is verified.</p>
           </article>
           <div class="stat-grid">
             <article><span>Wallet Sales Today</span><strong data-report-payments-today>0</strong><small>Purchased today</small></article>
