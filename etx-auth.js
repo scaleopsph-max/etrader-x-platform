@@ -413,7 +413,8 @@
 
       if (walletBalance < currentPlan.price_amount) {
         setStatus("Insufficient wallet balance. Deposit funds first and wait for admin approval.", "warn");
-        setClientFlow("payment", "Deposit funds first. Products can only be purchased using approved wallet balance.");
+        updateSelectedPlanSummary(currentPlan);
+        setClientFlow("payment", "Your selected plan needs more wallet balance. Submit a deposit and wait for admin approval.");
         goToTab("payments");
         return;
       }
@@ -441,6 +442,11 @@
 
         setStatus("Plan purchased using wallet balance. Subscription is active.", "ok");
         setClientFlow("subscription", "Congratulations. Your subscription is now active and reflected in your account.");
+        if (selectedPlan) {
+          selectedPlan.textContent = "Subscription active. Choose another ETX tool when ready.";
+          selectedPlan.className = "codebox ok";
+        }
+        currentPlan = null;
         closePlanModal();
         goToTab("subscriptions");
         await hydrateClientData();
@@ -456,7 +462,7 @@
     planModalDeposit?.addEventListener("click", () => {
       closePlanModal();
       goToTab("payments");
-      setClientFlow("payment", "Deposit funds first. Products can only be purchased using approved wallet balance.");
+      setClientFlow("payment", "Submit a wallet deposit, then wait for admin approval before subscribing.");
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closePlanModal();
@@ -934,16 +940,14 @@
           is_trial: Boolean(plan.is_trial),
         };
 
-        if (selectedPlan) {
-          selectedPlan.textContent = `${currentPlan.product_name} - ${currentPlan.name} - ${formatMoney(currentPlan.price_amount, currentPlan.currency)}`;
-        }
+        updateSelectedPlanSummary(currentPlan);
 
         if (paymentContext) {
           paymentContext.textContent = `Wallet deposit mode. Approved balance required before buying ${currentPlan.product_name} / ${currentPlan.name}.`;
         }
 
-        setStatus("Plan selected. Buy with wallet balance or deposit funds first.", "ok");
-        setClientFlow("payment", "Plan selected. Use approved wallet balance to buy, or deposit funds first.");
+        setStatus("Plan selected. Review wallet checkout details.", "ok");
+        setClientFlow("select", "Plan selected. Confirm inside the checkout modal, or deposit funds if balance is insufficient.");
         openPlanModal(currentPlan);
       });
     });
@@ -2989,18 +2993,27 @@
     const duration = plan.bonus_days ? `${plan.duration_days} days + ${plan.bonus_days} bonus` : `${plan.duration_days} days`;
     const price = plan.is_trial ? "Free Trial" : formatMoney(Number(plan.price_amount), plan.currency);
     const hasEnoughBalance = plan.is_trial || walletBalance >= Number(plan.price_amount || 0);
+    const requiredTopUp = Math.max(Number(plan.price_amount || 0) - walletBalance, 0);
+    const balanceAfterPurchase = plan.is_trial ? walletBalance : Math.max(walletBalance - Number(plan.price_amount || 0), 0);
     const status = hasEnoughBalance ? "Ready to subscribe" : "Deposit required";
 
     setText("[data-plan-modal-category]", plan.category || "ETX Trading Tools");
     setText("[data-plan-modal-title]", `${plan.product_name} / ${plan.name}`);
-    setText("[data-plan-modal-summary]", `${plan.product_name} access with ${plan.name}. Review your wallet balance before confirming.`);
+    setText("[data-plan-modal-summary]", `${plan.product_name} access with ${plan.name}. This checkout uses approved wallet balance only.`);
     setText("[data-plan-modal-price]", price);
     setText("[data-plan-modal-duration]", duration);
     setText("[data-plan-modal-wallet]", formatMoney(walletBalance, "USD"));
     setText("[data-plan-modal-status]", status);
+    setText("[data-plan-modal-after]", formatMoney(balanceAfterPurchase, "USD"));
+    setText("[data-plan-modal-gap]", hasEnoughBalance ? "No top-up needed" : formatMoney(requiredTopUp, "USD"));
     setText("[data-plan-modal-note]", hasEnoughBalance
-      ? "Your subscription will activate immediately after successful wallet purchase."
-      : "Deposit funds first and wait for admin approval before subscribing.");
+      ? "Ready. Your subscription will activate immediately after successful wallet purchase."
+      : `Your wallet is short by ${formatMoney(requiredTopUp, "USD")}. Deposit funds first and wait for admin approval before subscribing.`);
+
+    const statusTarget = document.querySelector("[data-plan-modal-status]");
+    if (statusTarget) {
+      statusTarget.className = hasEnoughBalance ? "ok" : "warn";
+    }
 
     if (planModalPurchase) {
       planModalPurchase.disabled = !hasEnoughBalance;
@@ -3014,6 +3027,17 @@
     planModal.classList.remove("hidden");
     planModal.setAttribute("aria-hidden", "false");
     document.body.classList.add("modal-open");
+  }
+
+  function updateSelectedPlanSummary(plan) {
+    if (!selectedPlan || !plan) return;
+
+    const hasEnoughBalance = plan.is_trial || walletBalance >= Number(plan.price_amount || 0);
+    const requiredTopUp = Math.max(Number(plan.price_amount || 0) - walletBalance, 0);
+    selectedPlan.textContent = hasEnoughBalance
+      ? `${plan.product_name} / ${plan.name} is ready for wallet checkout.`
+      : `${plan.product_name} / ${plan.name} selected. Add ${formatMoney(requiredTopUp, "USD")} to wallet before subscribing.`;
+    selectedPlan.className = `codebox ${hasEnoughBalance ? "ok" : "warn"}`.trim();
   }
 
   function closePlanModal() {

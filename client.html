@@ -209,13 +209,16 @@
           <div class="buy-grid" data-dynamic-plans>
             <article class="panel"><h3>Loading plans...</h3><p>Fetching ETX products from Supabase.</p></article>
           </div>
-          <article class="panel order-panel selected-order-panel">
-            <h3>Selected Order</h3>
-            <p class="codebox" id="selected-plan">No selected product yet.</p>
-            <div class="mini-form">
-              <label>Referral Code<input type="text" data-wallet-referral-code placeholder="Optional" /></label>
-              <button class="danger-btn" type="button" data-wallet-purchase>Buy With Wallet Balance</button>
+          <article class="panel order-panel checkout-status-panel">
+            <div class="panel-title-row">
+              <h3>Wallet Checkout</h3>
               <button class="secondary-btn" type="button" data-jump="payments">Deposit Funds</button>
+            </div>
+            <p class="codebox" id="selected-plan">Select a plan to review wallet checkout details.</p>
+            <div class="checkout-rule-grid">
+              <span><b>1</b> Choose ETX tool</span>
+              <span><b>2</b> Review plan modal</span>
+              <span><b>3</b> Subscribe using wallet</span>
             </div>
           </article>
         </div>
@@ -410,12 +413,19 @@
           <div><span>Duration</span><strong data-plan-modal-duration>--</strong></div>
           <div><span>Wallet Balance</span><strong data-plan-modal-wallet>$0.00</strong></div>
           <div><span>Status</span><strong data-plan-modal-status>Ready</strong></div>
+          <div><span>Balance After Purchase</span><strong data-plan-modal-after>$0.00</strong></div>
+          <div><span>Required Top-up</span><strong data-plan-modal-gap>$0.00</strong></div>
         </div>
         <p class="codebox" data-plan-modal-note>Subscription activates after wallet purchase succeeds.</p>
         <label class="modal-referral-field">
           Referral Code
           <input type="text" data-plan-modal-referral-code placeholder="Optional" />
         </label>
+        <div class="checkout-rule-grid modal-checkout-rules">
+          <span><b>1</b> Wallet balance only</span>
+          <span><b>2</b> Instant activation after purchase</span>
+          <span><b>3</b> Reflected in Profile and Subscriptions</span>
+        </div>
         <div class="form-actions">
           <button class="danger-btn" type="button" data-plan-modal-purchase>Subscribe Now</button>
           <button class="secondary-btn" type="button" data-plan-modal-deposit>Deposit Funds</button>
