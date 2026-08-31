@@ -42,6 +42,14 @@ Imported landing assets live under `assets/`. Public CTAs are connected to the E
 - Admin payment approval
 - Subscription activation
 - Referral and commission tracking
+- Wallet-only deposits with USD balance
+- PHP conversion rate management
+- Client notifications and browser alerts
+- Client profiling and account history
+- Landing creatives management
+- Expenses ledger and financial reports
+- PAM the Trading Assistant with admin-managed FAQ knowledge
+- Mobile-first portal polish
 
 ## Database Framework
 
@@ -49,5 +57,6 @@ The Supabase schema starts in `supabase/migrations/20260828033000_create_etx_cor
 Auth/profile policies and database hardening live in the follow-up migration files.
 Payment proof storage and admin CRUD permissions are added in the Module 7/8 migrations.
 Role registry foundation is added in the Module 15 migrations. The Module 16 permission matrix grants SUPER USER and ADMIN full operations access, while MANAGER is limited to view/report/support workflows.
+PAM FAQ knowledge is managed in `pam_faq_entries` with public active reads and admin-only writes.
 See `docs/database-framework.md` for the table map and security model.
 See `docs/production-security.md` for the pre-launch hardening checklist.

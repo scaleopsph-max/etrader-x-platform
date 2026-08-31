@@ -641,6 +641,7 @@ h3 {
 
 .login-card,
 .form-panel {
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   background:
@@ -1856,6 +1857,14 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.pam-faq-row small:first-of-type {
+  display: -webkit-box;
+  max-height: 4.8em;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
 .client-directory-meta {
   display: grid;
   gap: 6px;
@@ -2372,6 +2381,12 @@ textarea {
   .timeline-item,
   .checkout-rule-grid {
     grid-template-columns: 1fr;
+  }
+
+  .client-directory-row .secondary-btn,
+  .landing-creative-row .secondary-btn,
+  .pam-faq-row .secondary-btn {
+    width: 100%;
   }
 
   .client-directory-meta {

@@ -81,6 +81,7 @@
         <button data-tab="admin-subscriptions">Subscriptions</button>
         <button data-tab="admin-referrals">Referrals</button>
         <button data-tab="admin-support">Support</button>
+        <button data-tab="admin-pam" data-admin-write-only>PAM Knowledge</button>
         <button data-tab="admin-reports">Reports</button>
         <button data-tab="admin-audit" data-admin-write-only>Audit Logs</button>
         <button data-tab="admin-roles" data-super-user-only>Roles</button>
@@ -437,6 +438,47 @@
             <h3>Support Queue</h3>
             <div data-admin-support-queue>
               <p class="codebox">Sign in as admin to load support tickets.</p>
+            </div>
+          </article>
+        </div>
+
+        <div class="portal-tab" id="admin-pam">
+          <div class="page-heading">
+            <p class="eyebrow danger-text">PAM assistant</p>
+            <h2>Knowledge base control</h2>
+            <p>Manage the approved FAQ answers PAM uses in the client support chat.</p>
+          </div>
+          <div class="content-grid">
+            <article class="panel form-panel" data-admin-write-only>
+              <div class="panel-title-row">
+                <h3>Create FAQ</h3>
+                <button class="secondary-btn compact-btn" type="button" data-pam-faq-clear>Clear</button>
+              </div>
+              <form data-pam-faq-form>
+                <input type="hidden" name="id" />
+                <div class="form-grid">
+                  <label>Category<select name="category" required><option value="wallet">Wallet</option><option value="subscription">Subscription</option><option value="referral">Referral</option><option value="verification">Verification</option><option value="notifications">Notifications</option><option value="account">Account</option><option value="support">Support</option><option value="security">Security</option><option value="general">General</option></select></label>
+                  <label>Status<select name="status"><option value="draft">Draft</option><option value="active">Active</option><option value="hidden">Hidden</option></select></label>
+                  <label>Sort Order<input type="number" name="sort_order" value="100" min="0" /></label>
+                  <label>Keywords<input type="text" name="keywords" placeholder="deposit, wallet, gcash, usdt" /></label>
+                </div>
+                <label>Question<input type="text" name="question" placeholder="How does the ETX deposit flow work?" required /></label>
+                <label>Answer<textarea name="answer" placeholder="Write PAM's approved answer for this topic." required></textarea></label>
+                <button class="primary-btn" type="submit">Save PAM FAQ</button>
+              </form>
+            </article>
+            <article class="panel">
+              <h3>PAM Behavior</h3>
+              <div class="pam-admin-guidelines">
+                <p class="codebox ok">PAM answers active FAQs first, then falls back to built-in ETX flow guidance.</p>
+                <p class="codebox warn">Keep answers operational and support-focused. PAM must not promise guaranteed profit or request passwords, OTPs, seed phrases, or private keys.</p>
+              </div>
+            </article>
+          </div>
+          <article class="panel order-panel">
+            <h3>FAQ Library</h3>
+            <div data-pam-faq-list>
+              <p class="codebox">PAM FAQs load after sign in.</p>
             </div>
           </article>
         </div>

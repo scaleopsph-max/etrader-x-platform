@@ -76,6 +76,9 @@
   const landingCreativeClear = document.querySelector("[data-landing-creative-clear]");
   const landingCreativesList = document.querySelector("[data-landing-creatives-list]");
   const landingCreativePreview = document.querySelector("[data-landing-creative-preview]");
+  const pamFaqForm = document.querySelector("[data-pam-faq-form]");
+  const pamFaqClear = document.querySelector("[data-pam-faq-clear]");
+  const pamFaqList = document.querySelector("[data-pam-faq-list]");
   const adminSubscriptionsList = document.querySelector("[data-admin-subscriptions-list]");
   const adminExpiringList = document.querySelector("[data-admin-expiring-list]");
   const adminRolesList = document.querySelector("[data-admin-roles-list]");
@@ -153,6 +156,7 @@
   let adminReportSnapshot = null;
   let adminClientSnapshot = null;
   let landingCreativesCache = [];
+  let pamFaqEntriesCache = [];
   let auditLogsCache = [];
   let supportTicketsCache = [];
   let realtimeChannels = [];
@@ -195,7 +199,9 @@
     bindAuditExport();
     bindClientProfileSearch();
     bindLandingCreativeForm();
+    bindPamFaqForm();
     bindSignOut();
+    await loadPamKnowledge();
     await refreshSession();
     await loadPlans();
 
@@ -673,6 +679,25 @@
     aiChatMessages.appendChild(bubble);
   }
 
+  async function loadPamKnowledge() {
+    if (!client?.from) return;
+
+    const { data, error } = await client
+      .from("pam_faq_entries")
+      .select("id,category,question,answer,keywords,status,sort_order")
+      .eq("status", "active")
+      .order("sort_order", { ascending: true })
+      .limit(80);
+
+    if (error) {
+      console.warn("PAM knowledge base unavailable:", error.message);
+      pamFaqEntriesCache = [];
+      return;
+    }
+
+    pamFaqEntriesCache = data || [];
+  }
+
   const PAM_KNOWLEDGE = [
     {
       title: "Wallet / Deposit",
@@ -727,6 +752,9 @@
       return "Trading risk note from PAM: ETX tools can support analysis, workflow, and trading discipline, but they do not guarantee profit or remove market risk. Only trade with risk you understand and can manage.";
     }
 
+    const managedAnswer = findPamManagedAnswer(text);
+    if (managedAnswer) return managedAnswer;
+
     const matchedTopic = PAM_KNOWLEDGE
       .map((topic) => ({
         ...topic,
@@ -739,6 +767,35 @@
     }
 
     return "PAM can help with ETX wallet deposits, payment method details, USD balance, PHP conversion, ETX Trading Tools, subscriptions, referrals, verification, notifications, account/profile flow, and support tickets. For account-specific concerns, send a Support Request below so admin can review your case.";
+  }
+
+  function findPamManagedAnswer(text) {
+    const activeEntries = (pamFaqEntriesCache || []).filter((entry) => entry.status === "active");
+    if (!activeEntries.length) return "";
+
+    const matchedEntry = activeEntries
+      .map((entry) => {
+        const keywords = Array.isArray(entry.keywords) ? entry.keywords : [];
+        const questionText = String(entry.question || "").toLowerCase();
+        const categoryText = String(entry.category || "").toLowerCase();
+        const keywordScore = keywords.reduce((total, keyword) => {
+          const cleanKeyword = String(keyword || "").trim().toLowerCase();
+          return total + (cleanKeyword && text.includes(cleanKeyword) ? 2 : 0);
+        }, 0);
+        const questionScore = questionText
+          .split(/\s+/)
+          .filter((word) => word.length > 3 && text.includes(word))
+          .length;
+        const categoryScore = categoryText && text.includes(categoryText) ? 1 : 0;
+        return {
+          ...entry,
+          score: keywordScore + questionScore + categoryScore,
+        };
+      })
+      .sort((a, b) => b.score - a.score || Number(a.sort_order || 100) - Number(b.sort_order || 100))[0];
+
+    if (!matchedEntry?.score) return "";
+    return `PAM answer: ${formatStatus(matchedEntry.category || "ETX")}\n\n${matchedEntry.answer}`;
   }
 
   function bindSignOut() {
@@ -1726,8 +1783,16 @@
         .order("created_at", { ascending: false })
         .limit(80)
       : Promise.resolve({ data: [], error: null });
+    const pamFaqRequest = hasAdminAccess()
+      ? client
+        .from("pam_faq_entries")
+        .select("*")
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false })
+        .limit(120)
+      : Promise.resolve({ data: [], error: null });
 
-    const [products, plans, paymentMethods, payments, deposits, walletTransactions, expenses, referrals, commissionRequests, supportTickets, subscriptions, orders, profiles, notifications, roles, exchangeRates, auditLogs, landingCreatives] = await Promise.all([
+    const [products, plans, paymentMethods, payments, deposits, walletTransactions, expenses, referrals, commissionRequests, supportTickets, subscriptions, orders, profiles, notifications, roles, exchangeRates, auditLogs, landingCreatives, pamFaqEntries] = await Promise.all([
       client.from("products").select("*").order("sort_order", { ascending: true }),
       client.from("plans").select("*,products(name,code)").order("created_at", { ascending: false }),
       client.from("payment_methods").select("*").order("sort_order", { ascending: true }),
@@ -1792,10 +1857,11 @@
       client.from("exchange_rates").select("*").eq("quote_currency", "PHP").maybeSingle(),
       auditRequest,
       landingRequest,
+      pamFaqRequest,
     ]);
 
-    if (products.error || plans.error || paymentMethods.error || payments.error || deposits.error || walletTransactions.error || expenses.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error || profiles.error || notifications.error || roles.error || exchangeRates.error || auditLogs.error || landingCreatives.error) {
-      setStatus(products.error?.message || plans.error?.message || paymentMethods.error?.message || payments.error?.message || deposits.error?.message || walletTransactions.error?.message || expenses.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message || profiles.error?.message || notifications.error?.message || roles.error?.message || exchangeRates.error?.message || auditLogs.error?.message || landingCreatives.error?.message, "warn");
+    if (products.error || plans.error || paymentMethods.error || payments.error || deposits.error || walletTransactions.error || expenses.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error || profiles.error || notifications.error || roles.error || exchangeRates.error || auditLogs.error || landingCreatives.error || pamFaqEntries.error) {
+      setStatus(products.error?.message || plans.error?.message || paymentMethods.error?.message || payments.error?.message || deposits.error?.message || walletTransactions.error?.message || expenses.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message || profiles.error?.message || notifications.error?.message || roles.error?.message || exchangeRates.error?.message || auditLogs.error?.message || landingCreatives.error?.message || pamFaqEntries.error?.message, "warn");
       return;
     }
 
@@ -1831,6 +1897,7 @@
       auditLogs: auditLogs.data || [],
       exchangeRates: exchangeRates.data ? [exchangeRates.data] : [],
       landingCreatives: landingCreatives.data || [],
+      pamFaqEntries: pamFaqEntries.data || [],
     };
 
     renderListElement(adminSupportQueue, dataSnapshot.supportTickets, renderSupportReviewCard, "No support tickets yet.");
@@ -1842,6 +1909,8 @@
     renderListElement(adminRolesList, roles.data, renderAdminRoleRow, "No custom roles yet.");
     landingCreativesCache = dataSnapshot.landingCreatives;
     renderLandingCreatives();
+    pamFaqEntriesCache = dataSnapshot.pamFaqEntries;
+    renderPamFaqEntries();
     updateBadge(adminNotificationBadge, (notifications.data || []).filter((notification) => notification.status === "unread").length);
     auditLogsCache = auditLogs.data || [];
     renderAuditLogs();
@@ -2009,6 +2078,61 @@
         clearLandingCreativeForm();
         setStatus("Landing creative saved.", "ok");
         await loadAdminData();
+      });
+    });
+  }
+
+  function bindPamFaqForm() {
+    if (pamFaqClear) {
+      pamFaqClear.addEventListener("click", () => {
+        clearPamFaqForm();
+        setStatus("PAM FAQ form cleared.", "ok");
+      });
+    }
+
+    if (!pamFaqForm) return;
+    pamFaqForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!requireAdminWrite()) return;
+
+      await withButtonLoading(event.submitter, "Saving...", async () => {
+        const form = new FormData(pamFaqForm);
+        const payload = {
+          category: normalizeKey(form.get("category") || "general"),
+          question: String(form.get("question") || "").trim(),
+          answer: String(form.get("answer") || "").trim(),
+          keywords: parseKeywordList(form.get("keywords")),
+          status: String(form.get("status") || "draft"),
+          sort_order: Number(form.get("sort_order") || 100),
+          updated_by: currentUser.id,
+        };
+        const id = String(form.get("id") || "").trim();
+        if (!id) payload.created_by = currentUser.id;
+
+        if (!payload.question || !payload.answer) {
+          setStatus("Add both question and answer before saving PAM FAQ.", "warn");
+          return;
+        }
+
+        const query = id
+          ? client.from("pam_faq_entries").update(payload).eq("id", id).select("*").single()
+          : client.from("pam_faq_entries").insert(payload).select("*").single();
+        const { data, error } = await query;
+
+        if (error) {
+          setStatus(error.message, "warn");
+          return;
+        }
+
+        await logAdminAction(id ? "pam_faq.updated" : "pam_faq.created", "pam_faq_entries", data.id, {
+          category: data.category,
+          status: data.status,
+          question: data.question,
+        });
+        clearPamFaqForm();
+        setStatus("PAM FAQ saved and ready for active knowledge matching.", "ok");
+        await loadAdminData();
+        await loadPamKnowledge();
       });
     });
   }
@@ -3007,6 +3131,65 @@
     `;
   }
 
+  function renderPamFaqEntries() {
+    if (!pamFaqList) return;
+
+    pamFaqList.innerHTML = pamFaqEntriesCache.length
+      ? pamFaqEntriesCache.map(renderPamFaqRow).join("")
+      : `<p class="codebox">No PAM FAQ entries yet.</p>`;
+
+    document.querySelectorAll("[data-edit-pam-faq]").forEach((button) => {
+      if (button.dataset.bound === "true") return;
+      button.dataset.bound = "true";
+      button.addEventListener("click", () => {
+        const entry = pamFaqEntriesCache.find((item) => item.id === button.dataset.editPamFaq);
+        hydratePamFaqForm(entry);
+      });
+    });
+  }
+
+  function renderPamFaqRow(entry) {
+    const keywords = Array.isArray(entry.keywords) && entry.keywords.length
+      ? entry.keywords.slice(0, 8).join(", ")
+      : "No keywords";
+
+    return `
+      <div class="landing-creative-row pam-faq-row">
+        <div>
+          <span class="pill">${escapeHtml(formatStatus(entry.category || "general"))}</span>
+          <strong>${escapeHtml(entry.question)}</strong>
+          <small>${escapeHtml(entry.answer)}</small>
+          <small>${escapeHtml(keywords)}</small>
+        </div>
+        <div class="client-directory-meta">
+          <span>${escapeHtml(formatStatus(entry.status))}</span>
+          <span>Sort ${Number(entry.sort_order || 0)}</span>
+        </div>
+        <button class="secondary-btn" type="button" data-edit-pam-faq="${escapeHtml(entry.id)}">Edit</button>
+      </div>
+    `;
+  }
+
+  function hydratePamFaqForm(entry) {
+    if (!pamFaqForm || !entry) return;
+
+    pamFaqForm.elements.id.value = entry.id || "";
+    pamFaqForm.elements.category.value = entry.category || "general";
+    pamFaqForm.elements.status.value = entry.status || "draft";
+    pamFaqForm.elements.sort_order.value = entry.sort_order ?? 100;
+    pamFaqForm.elements.keywords.value = Array.isArray(entry.keywords) ? entry.keywords.join(", ") : "";
+    pamFaqForm.elements.question.value = entry.question || "";
+    pamFaqForm.elements.answer.value = entry.answer || "";
+    setStatus("PAM FAQ loaded for editing.", "ok");
+  }
+
+  function clearPamFaqForm() {
+    if (!pamFaqForm) return;
+    pamFaqForm.reset();
+    pamFaqForm.elements.id.value = "";
+    pamFaqForm.elements.sort_order.value = 100;
+  }
+
   function datetimeLocalToIso(value) {
     if (!value) return null;
     const date = new Date(String(value));
@@ -3764,6 +3947,23 @@
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^_+|_+$/g, "");
+  }
+
+  function normalizeKey(value) {
+    return String(value || "general")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 48) || "general";
+  }
+
+  function parseKeywordList(value) {
+    return [...new Set(String(value || "")
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean)
+      .slice(0, 24))];
   }
 
   function renderGroupedPlans(plans) {
