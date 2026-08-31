@@ -3486,7 +3486,7 @@
     }
 
     await logAdminAction(`${table}.${status}`, table, id, { status });
-    setStatus(`${table.slice(0, -1)} marked as ${status}.`, "ok");
+    setStatus(`${humanTableName(table)} updated to ${formatStatus(status)}.`, "ok");
     await loadAdminData();
     await loadPlans();
   }
@@ -4577,12 +4577,17 @@
   function renderList(selector, rows, renderer, emptyText) {
     const target = document.querySelector(selector);
     if (!target) return;
-    target.innerHTML = rows?.length ? rows.map(renderer).join("") : `<p class="codebox">${escapeHtml(emptyText)}</p>`;
+    target.innerHTML = rows?.length ? rows.map(renderer).join("") : renderEmptyState(emptyText);
   }
 
   function renderListElement(target, rows, renderer, emptyText) {
     if (!target) return;
-    target.innerHTML = rows?.length ? rows.map(renderer).join("") : `<p class="codebox">${escapeHtml(emptyText)}</p>`;
+    target.innerHTML = rows?.length ? rows.map(renderer).join("") : renderEmptyState(emptyText);
+  }
+
+  function renderEmptyState(message) {
+    const text = String(message || "No records yet.").trim();
+    return `<p class="codebox empty-state">${escapeHtml(text)}</p>`;
   }
 
   async function withButtonLoading(button, loadingText, action, fallbackError = "Action could not be completed.") {
@@ -4598,10 +4603,16 @@
     if (button.disabled && button.dataset.busy === "true") return null;
 
     const originalText = button.textContent;
+    const originalWidth = button.getBoundingClientRect().width;
     button.disabled = true;
     button.dataset.busy = "true";
+    button.setAttribute("aria-busy", "true");
     button.classList.add("is-processing");
+    if (originalWidth) button.style.minWidth = `${Math.ceil(originalWidth)}px`;
     button.textContent = loadingText;
+    if (button.closest(".admin-portal, .admin-auth-gate")) {
+      showToast(actionProgressMessage(loadingText), "info");
+    }
 
     try {
       return await action();
@@ -4611,8 +4622,10 @@
     } finally {
       button.disabled = false;
       button.dataset.busy = "false";
+      button.removeAttribute("aria-busy");
       button.classList.remove("is-processing");
       button.textContent = originalText;
+      button.style.minWidth = "";
     }
   }
 
@@ -4656,7 +4669,7 @@
     toast.className = `toast ${normalizedTone}`;
     toast.setAttribute("role", normalizedTone === "warn" ? "alert" : "status");
     toast.innerHTML = `
-      <span>${escapeHtml(toastTitle(normalizedTone))}</span>
+      <span>${escapeHtml(toastTitle(normalizedTone, text))}</span>
       <strong>${escapeHtml(text)}</strong>
     `;
     host.appendChild(toast);
@@ -4680,10 +4693,49 @@
     return toastHost;
   }
 
-  function toastTitle(tone) {
-    if (tone === "ok") return "Success";
+  function toastTitle(tone, message = "") {
+    const text = String(message).toLowerCase();
+    if (tone === "ok") {
+      if (text.includes("saved")) return "Saved";
+      if (text.includes("updated")) return "Updated";
+      if (text.includes("approved")) return "Approved";
+      if (text.includes("rejected")) return "Rejected";
+      if (text.includes("created")) return "Created";
+      if (text.includes("exported")) return "Exported";
+      if (text.includes("copied")) return "Copied";
+      return "Done";
+    }
     if (tone === "warn") return "Needs attention";
-    return "Working";
+    if (text.includes("saving")) return "Saving";
+    if (text.includes("updating")) return "Updating";
+    if (text.includes("approving")) return "Approving";
+    if (text.includes("rejecting")) return "Rejecting";
+    if (text.includes("opening")) return "Opening";
+    if (text.includes("fetching")) return "Fetching";
+    if (text.includes("sending")) return "Sending";
+    if (text.includes("signing")) return "Signing in";
+    return "Processing";
+  }
+
+  function actionProgressMessage(loadingText) {
+    const text = String(loadingText || "Processing...").replace(/\.+$/, "");
+    const lower = text.toLowerCase();
+    if (lower.includes("saving")) return "Saving changes...";
+    if (lower.includes("updating")) return "Updating status...";
+    if (lower.includes("approving")) return "Approving request...";
+    if (lower.includes("rejecting")) return "Rejecting request...";
+    if (lower.includes("opening")) return "Opening proof...";
+    if (lower.includes("fetching")) return "Fetching latest data...";
+    if (lower.includes("sending")) return "Sending update...";
+    if (lower.includes("creating")) return "Creating record...";
+    return `${text}...`;
+  }
+
+  function humanTableName(table) {
+    return String(table || "record")
+      .replace(/_/g, " ")
+      .replace(/s$/, "")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 
   function setText(selector, value) {

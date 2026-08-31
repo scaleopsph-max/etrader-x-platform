@@ -21,6 +21,7 @@ Premium landing page and MVP framework for the ETrader-X trading products platfo
 - Restricted anonymous database access for private tables
 - Least-privilege public table grants for Supabase Data API access
 - Full mobile overflow QA pass for client/admin portal tabs
+- Admin UX feedback polish for save/update/approval actions
 
 ## Planned Stack
 
@@ -53,6 +54,7 @@ Imported landing assets live under `assets/`. Public CTAs are connected to the E
 - PAM the Trading Assistant with admin-managed FAQ knowledge
 - Mobile-first portal polish
 - Supabase RLS and grants hardening
+- Admin action feedback and responsive operations polish
 
 ## Database Framework
 
