@@ -19,10 +19,10 @@
   - `Cross-Origin-Opener-Policy: same-origin`
   - `X-Permitted-Cross-Domain-Policies: none`
   - Content Security Policy scoped to ETX, Google Fonts, jsDelivr, and the Supabase project.
-- `client.html` and `admin.html` use `Cache-Control: no-store` because they contain auth-dependent UI.
+- `client.html`, `admin.html`, `/client`, and `/admin` use `Cache-Control: no-store` because they contain auth-dependent UI.
 - JS/CSS use short revalidation caching so new pushes appear quickly.
 - `assets/*` uses longer static caching.
-- `admin.html` remains `X-Robots-Tag: noindex, nofollow`.
+- `admin.html` and `/admin` remain `X-Robots-Tag: noindex, nofollow`.
 
 ## Supabase Production Settings
 
