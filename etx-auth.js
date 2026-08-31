@@ -85,6 +85,7 @@
   const planModalPurchase = document.querySelector("[data-plan-modal-purchase]");
   const planModalDeposit = document.querySelector("[data-plan-modal-deposit]");
   const planModalReferralCode = document.querySelector("[data-plan-modal-referral-code]");
+  const planModalBenefits = document.querySelector("[data-plan-modal-benefits]");
   const walletTransactionsList = document.querySelector("[data-wallet-transactions-list]");
   const depositRequestsList = document.querySelector("[data-deposit-requests-list]");
   const commissionForm = document.querySelector("[data-commission-form]");
@@ -154,6 +155,7 @@
     bindWalletPurchase();
     bindProofInput();
     bindPaymentMethodSelect();
+    bindPaymentMethodCopy();
     bindDepositEstimate();
     bindNotificationActions();
     bindCommissionForm();
@@ -322,6 +324,11 @@
         const selectedMethod = paymentMethodsCache.find((method) => method.method_key === String(form.get("method") || ""));
         if (!selectedMethod) {
           setStatus("Select an active deposit method first.", "warn");
+          return;
+        }
+
+        if (!selectedMethod.account_number) {
+          setStatus("This payment method is missing receiving details. Please choose another method or contact support.", "warn");
           return;
         }
 
@@ -1117,6 +1124,23 @@
     });
   }
 
+  function bindPaymentMethodCopy() {
+    if (!paymentMethodDetails) return;
+    paymentMethodDetails.addEventListener("click", async (event) => {
+      if (!(event.target instanceof Element)) return;
+      const button = event.target.closest("[data-copy-payment-detail]");
+      if (!button) return;
+
+      const value = button.dataset.copyPaymentDetail || "";
+      if (!value) {
+        setStatus("No payment detail available to copy.", "warn");
+        return;
+      }
+
+      await copyText(value, "Payment detail copied.");
+    });
+  }
+
   function bindDepositEstimate() {
     if (!depositAmountInput) return;
     depositAmountInput.addEventListener("input", renderDepositEstimate);
@@ -1146,6 +1170,9 @@
 
     const account = method.account_number ? method.account_number : "Account details not configured yet.";
     const accountTone = method.account_number ? "" : "warn";
+    const copyButton = method.account_number
+      ? `<button class="ghost-btn compact-btn copy-detail-btn" type="button" data-copy-payment-detail="${escapeHtml(method.account_number)}">Copy</button>`
+      : "";
     const metaRows = [
       ["Account Name", method.account_name || "ETX Finance"],
       [method.type === "crypto" ? "Wallet Address" : "Account / Mobile Number", account],
@@ -1160,9 +1187,13 @@
     paymentMethodDetails.innerHTML = `
       <strong>Send funds to: ${escapeHtml(method.name)}</strong>
       <div class="method-data-list">
-        ${metaRows.map(([label, value]) => `<span><small>${escapeHtml(label)}</small><b class="${label.includes("Account / Mobile") || label.includes("Wallet") ? accountTone : ""}">${escapeHtml(value)}</b></span>`).join("")}
+        ${metaRows.map(([label, value]) => {
+          const isDestination = label.includes("Account / Mobile") || label.includes("Wallet");
+          return `<span class="${isDestination ? "payment-destination-row" : ""}"><small>${escapeHtml(label)}</small><b class="${isDestination ? accountTone : ""}">${escapeHtml(value)}</b>${isDestination ? copyButton : ""}</span>`;
+        }).join("")}
       </div>
       <span>${escapeHtml(currencyNote)}</span>
+      ${method.account_number ? `<p class="payment-safe-note">Send only to this active ETX destination, then upload proof with visible reference details.</p>` : `<p class="payment-safe-note warn">This method is not ready. Admin must add the official receiving account before clients can submit deposits.</p>`}
       <small>${escapeHtml(method.instructions || "Send the exact top-up amount, then upload proof with a visible reference number.")}</small>
       ${qr}
     `;
@@ -3010,6 +3041,16 @@
       ? "Ready. Your subscription will activate immediately after successful wallet purchase."
       : `Your wallet is short by ${formatMoney(requiredTopUp, "USD")}. Deposit funds first and wait for admin approval before subscribing.`);
 
+    if (planModalBenefits) {
+      const benefits = [
+        `${plan.category || "ETX Trading Tools"} access`,
+        `${duration} subscription term`,
+        hasEnoughBalance ? "Wallet checkout is ready" : "Deposit approval required before checkout",
+        "Subscription status updates in Profile and Subscriptions",
+      ];
+      planModalBenefits.innerHTML = benefits.map((item) => `<span>${escapeHtml(item)}</span>`).join("");
+    }
+
     const statusTarget = document.querySelector("[data-plan-modal-status]");
     if (statusTarget) {
       statusTarget.className = hasEnoughBalance ? "ok" : "warn";
@@ -3556,6 +3597,27 @@
       button.dataset.busy = "false";
       button.classList.remove("is-processing");
       button.textContent = originalText;
+    }
+  }
+
+  async function copyText(value, successMessage = "Copied.") {
+    try {
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const field = document.createElement("textarea");
+        field.value = value;
+        field.setAttribute("readonly", "");
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.appendChild(field);
+        field.select();
+        document.execCommand("copy");
+        field.remove();
+      }
+      setStatus(successMessage, "ok");
+    } catch (error) {
+      setStatus("Copy failed. Please copy the detail manually.", "warn");
     }
   }
 
