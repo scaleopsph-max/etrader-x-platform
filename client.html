@@ -373,13 +373,31 @@
             <p>Ask quick FAQ questions or send a ticket when your concern needs manual review.</p>
           </div>
           <article class="panel ai-chat-panel">
-            <h3>AI FAQ Assistant</h3>
+            <div class="pam-identity">
+              <div class="pam-avatar" aria-hidden="true">PAM</div>
+              <div>
+                <p class="eyebrow">ETX Assistant</p>
+                <h3>PAM the Trading Assistant</h3>
+                <p>Platform Assistance Manager for wallet, subscriptions, referrals, verification, notifications, and support flow.</p>
+              </div>
+              <span class="pam-status">Online Guide</span>
+            </div>
+            <div class="pam-quick-actions" aria-label="PAM quick questions">
+              <button type="button" data-pam-prompt="How does the deposit flow work?">Deposit flow</button>
+              <button type="button" data-pam-prompt="How does wallet balance work?">Wallet balance</button>
+              <button type="button" data-pam-prompt="How do I buy ETX Trading Tools?">Buy tools</button>
+              <button type="button" data-pam-prompt="Where can I check my subscription status?">Subscription status</button>
+              <button type="button" data-pam-prompt="How does referral commission work?">Referral commission</button>
+              <button type="button" data-pam-prompt="What should I do if my deposit is rejected?">Rejected deposit</button>
+              <button type="button" data-pam-prompt="Where do I see notifications?">Notifications</button>
+              <button type="button" data-pam-prompt="I need manual support.">Need support</button>
+            </div>
             <div class="ai-chat-messages" data-ai-chat-messages>
-              <div class="ai-message bot">Hi. Ask about wallet deposits, subscriptions, referrals, verification, or support.</div>
+              <div class="ai-message bot">Hi, I'm PAM. I can guide you through the ETX client flow: deposit first, wait for admin verification, then subscribe using approved USD wallet balance. Ask me anything about deposits, tools, referrals, or support.</div>
             </div>
             <form class="ai-chat-form" data-ai-chat-form>
-              <input type="text" name="message" placeholder="Ask ETX FAQ..." autocomplete="off" required />
-              <button class="primary-btn" type="submit">Ask</button>
+              <input type="text" name="message" placeholder="Ask PAM about ETX..." autocomplete="off" required />
+              <button class="primary-btn" type="submit">Ask PAM</button>
             </form>
           </article>
           <article class="panel form-panel">

@@ -112,6 +112,7 @@
   const enableNotificationButtons = document.querySelectorAll("[data-enable-notifications]");
   const aiChatForm = document.querySelector("[data-ai-chat-form]");
   const aiChatMessages = document.querySelector("[data-ai-chat-messages]");
+  const pamPromptButtons = document.querySelectorAll("[data-pam-prompt]");
   const MAX_PROOF_SIZE = 8 * 1024 * 1024;
   const ALLOWED_PROOF_TYPES = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
   const LIVE_RATE_URL = "https://open.er-api.com/v6/latest/USD";
@@ -637,17 +638,31 @@
   function bindAiSupportChat() {
     if (!aiChatForm || !aiChatMessages) return;
 
+    pamPromptButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const question = String(button.dataset.pamPrompt || "").trim();
+        if (!question) return;
+        handlePamQuestion(question);
+      });
+    });
+
     aiChatForm.addEventListener("submit", (event) => {
       event.preventDefault();
       const form = new FormData(aiChatForm);
       const question = String(form.get("message") || "").trim();
       if (!question) return;
 
-      appendAiMessage(question, "user");
-      appendAiMessage(getFaqAnswer(question), "bot");
+      handlePamQuestion(question);
       aiChatForm.reset();
-      aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
     });
+  }
+
+  function handlePamQuestion(question) {
+    appendAiMessage(question, "user");
+    appendAiMessage(getPamAnswer(question), "bot");
+    if (aiChatMessages) {
+      aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
+    }
   }
 
   function appendAiMessage(message, role) {
@@ -658,34 +673,72 @@
     aiChatMessages.appendChild(bubble);
   }
 
-  function getFaqAnswer(question) {
+  const PAM_KNOWLEDGE = [
+    {
+      title: "Wallet / Deposit",
+      keywords: ["deposit", "top up", "top-up", "wallet", "payment", "bayad", "proof", "gcash", "bpi", "usdt", "php", "peso", "rate", "conversion", "convert", "address", "bank"],
+      answer: "Deposit flow:\n1. Open Wallet / Deposit.\n2. Choose the payment method.\n3. Send funds only to the official ETX receiving details shown on that page.\n4. Enter reference or TX hash, amount, and upload proof.\n5. Wait for admin verification.\n\nUSD is the main wallet currency. USDT is credited 1:1. PHP deposits use the active platform conversion rate plus the configured markup."
+    },
+    {
+      title: "ETX Trading Tools",
+      keywords: ["subscribe", "subscription", "plan", "buy", "purchase", "tools", "trading tools", "ea", "indicator", "signal", "safy", "yugo", "vip", "package"],
+      answer: "Buying flow:\n1. Deposit first and wait until the wallet balance is approved.\n2. Open ETX Trading Tools.\n3. Pick a category and select a plan.\n4. Review the plan details in the popup.\n5. Subscribe using your approved wallet balance.\n\nIf the wallet balance is not enough, top up first before buying."
+    },
+    {
+      title: "Subscription Status",
+      keywords: ["active", "expired", "duration", "renew", "renewal", "status", "access", "valid", "days left"],
+      answer: "Subscription status is shown in Subscriptions and Profile after purchase. Once the wallet purchase is completed, the subscription should appear with its active dates, status, and remaining access period."
+    },
+    {
+      title: "Referral Commission",
+      keywords: ["referral", "refer", "commission", "invite", "code", "link", "withdraw", "payout", "5%"],
+      answer: "Referral rules:\n1. Share your referral code or link.\n2. When a referred client buys a valid ETX plan, you earn 5% of the subscribed amount.\n3. Commission is only counted after a valid wallet purchase.\n4. Self-referrals, duplicate accounts, fake transactions, or abuse attempts can be rejected.\n5. Available commission can be requested for withdrawal from the Referral page."
+    },
+    {
+      title: "Verification",
+      keywords: ["verify", "verification", "approved", "pending", "rejected", "reject", "review", "correction", "failed"],
+      answer: "Verification guide:\nPending means ETX admin is reviewing the deposit proof.\nApproved means the USD wallet balance was credited.\nRejected means the proof, amount, method, or reference needs correction.\n\nIf rejected, resubmit the correct proof or send a support ticket with your reference number."
+    },
+    {
+      title: "Notifications",
+      keywords: ["notification", "notify", "bell", "alert", "message", "update", "congratulations"],
+      answer: "Notifications appear in the bell area at the top of the client portal. You will be notified for deposit updates, subscription activation, support replies, and referral commission events. Browser alerts work while the portal is open if notifications are enabled."
+    },
+    {
+      title: "Account / Profile",
+      keywords: ["login", "account", "profile", "email", "telegram", "name", "signup", "sign up", "register", "password"],
+      answer: "Account guide:\nLogin first to unlock the client dashboard. Your Profile stores your name, email, Telegram username, client ID, referral code, wallet summary, subscriptions, and recent activity.\n\nFor password or access issues, use the official login recovery flow or submit a support request."
+    },
+    {
+      title: "Support",
+      keywords: ["support", "help", "ticket", "reply", "concern", "issue", "problem", "manual"],
+      answer: "For account-specific help, submit a Support Request below this chat. Include the plan name, deposit reference or TX hash, amount, payment method, and a short explanation so ETX admin can review faster."
+    }
+  ];
+
+  function getPamAnswer(question) {
     const text = question.toLowerCase();
 
-    if (text.includes("deposit") || text.includes("top up") || text.includes("payment") || text.includes("bayad") || text.includes("proof") || text.includes("gcash") || text.includes("bpi") || text.includes("usdt")) {
-      return "For deposits: open Wallet / Deposit, select a method, enter paid amount and reference, then upload proof. GCash/BPI PHP deposits are converted to USD using the platform rate. USDT is credited 1:1 after admin approval.";
+    if (["otp", "one time password", "private key", "seed phrase", "secret key", "recovery phrase"].some((keyword) => text.includes(keyword))) {
+      return "Security reminder from PAM: never share your password, OTP, seed phrase, private keys, recovery phrase, or wallet secret. ETX support and PAM will never ask for those. If someone requests them, stop and report it through Support.";
     }
 
-    if (text.includes("subscribe") || text.includes("subscription") || text.includes("plan") || text.includes("buy")) {
-      return "For subscriptions: deposit funds first, wait for admin approval, then go to Subscribe / Buy and purchase your ETX plan using wallet balance.";
+    if (["guarantee", "guaranteed", "sure profit", "no loss", "win rate", "100%", "financial advice"].some((keyword) => text.includes(keyword))) {
+      return "Trading risk note from PAM: ETX tools can support analysis, workflow, and trading discipline, but they do not guarantee profit or remove market risk. Only trade with risk you understand and can manage.";
     }
 
-    if (text.includes("referral") || text.includes("refer") || text.includes("commission") || text.includes("withdraw")) {
-      return "For referrals: copy your referral link from the Referral page. You earn 5% when a referred client buys a plan using wallet balance. Withdrawal requests are reviewed by admin.";
+    const matchedTopic = PAM_KNOWLEDGE
+      .map((topic) => ({
+        ...topic,
+        score: topic.keywords.reduce((total, keyword) => total + (text.includes(keyword) ? 1 : 0), 0)
+      }))
+      .sort((a, b) => b.score - a.score)[0];
+
+    if (matchedTopic?.score) {
+      return `PAM answer: ${matchedTopic.title}\n\n${matchedTopic.answer}`;
     }
 
-    if (text.includes("verify") || text.includes("verification") || text.includes("approved") || text.includes("pending") || text.includes("rejected")) {
-      return "Verification status appears in Wallet and Notifications. Pending means admin is reviewing your deposit. Approved credits your wallet. Rejected means you need to resend corrected proof or details.";
-    }
-
-    if (text.includes("login") || text.includes("account") || text.includes("password") || text.includes("profile")) {
-      return "For account concerns: check your Profile details after login. If you cannot access your account, send a support ticket with your email and Telegram username.";
-    }
-
-    if (text.includes("support") || text.includes("help") || text.includes("ticket")) {
-      return "For manual help, submit a Support Request below this chat. Include your plan, deposit reference, and a short explanation so ETX can review faster.";
-    }
-
-    return "I can help with ETX wallet deposits, subscriptions, referrals, verification, login, and support tickets. For account-specific concerns, send a support request below.";
+    return "PAM can help with ETX wallet deposits, payment method details, USD balance, PHP conversion, ETX Trading Tools, subscriptions, referrals, verification, notifications, account/profile flow, and support tickets. For account-specific concerns, send a Support Request below so admin can review your case.";
   }
 
   function bindSignOut() {
