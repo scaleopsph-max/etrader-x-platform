@@ -1133,6 +1133,24 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.financial-statement-card {
+  border-color: rgba(51, 255, 153, 0.2);
+}
+
+.statement-row {
+  align-items: start;
+}
+
+.statement-row:last-child {
+  border-top: 1px solid rgba(51, 255, 153, 0.18);
+  margin-top: 8px;
+  padding-top: 14px;
+}
+
+.statement-row:last-child b {
+  font-size: 22px;
+}
+
 .proof-note {
   margin: 0 0 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1604,6 +1622,16 @@ textarea {
   font-weight: 700;
 }
 
+.expense-row {
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+}
+
+.expense-row a {
+  color: var(--cyan);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .compact-field {
   min-width: 128px;
 }
@@ -1905,7 +1933,8 @@ textarea {
   .buy-grid,
   .urgency-strip,
   .approval-card,
-  .deposit-review-card {
+  .deposit-review-card,
+  .expense-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2074,6 +2103,7 @@ textarea {
   .urgency-strip,
   .approval-card,
   .deposit-review-card,
+  .expense-row,
   .client-profile-layout,
   .client-history-grid {
     grid-template-columns: 1fr;

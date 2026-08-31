@@ -40,6 +40,13 @@
   const adminReferralList = document.querySelector("[data-admin-referral-list]");
   const adminCommissionQueue = document.querySelector("[data-admin-commission-queue]");
   const adminSupportQueue = document.querySelector("[data-admin-support-queue]");
+  const adminExpenseForm = document.querySelector("[data-admin-expense-form]");
+  const adminExpenseClear = document.querySelector("[data-expense-clear]");
+  const adminExpensesList = document.querySelector("[data-admin-expenses-list]");
+  const expenseAmountInput = document.querySelector("[data-expense-amount]");
+  const expenseCurrencySelect = document.querySelector("[data-expense-currency]");
+  const expenseUsdInput = document.querySelector("[data-expense-usd]");
+  const expenseRateNote = document.querySelector("[data-expense-rate-note]");
   const adminPriorityList = document.querySelector("[data-admin-priority-list]");
   const adminHealthList = document.querySelector("[data-admin-health-list]");
   const adminRevenueList = document.querySelector("[data-admin-revenue-list]");
@@ -47,9 +54,12 @@
   const reportStatusFilter = document.querySelector("[data-report-status]");
   const reportMethodFilter = document.querySelector("[data-report-method]");
   const reportSearchFilter = document.querySelector("[data-report-search]");
+  const reportFinancialStatement = document.querySelector("[data-report-financial-statement]");
+  const reportWalletReconciliation = document.querySelector("[data-report-wallet-reconciliation]");
   const reportDepositsList = document.querySelector("[data-report-deposits-list]");
   const reportSubscriptionsList = document.querySelector("[data-report-subscriptions-list]");
   const reportReferralsList = document.querySelector("[data-report-referrals-list]");
+  const reportExpensesList = document.querySelector("[data-report-expenses-list]");
   const auditRangeFilter = document.querySelector("[data-audit-range]");
   const auditActionFilter = document.querySelector("[data-audit-action]");
   const auditEntityFilter = document.querySelector("[data-audit-entity]");
@@ -166,6 +176,7 @@
     bindAdminForms();
     bindExchangeRateForm();
     bindAdminRoleForm();
+    bindExpenseForm();
     bindReportFilters();
     bindReportExports();
     bindAuditFilters();
@@ -790,6 +801,7 @@
           hydrateExchangeRateForm();
           renderExchangeRateSummary();
           renderDepositEstimate();
+          syncExpenseUsdAmount();
           setStatus("Live USD/PHP rate loaded. Review markup, then save.", "ok");
         }, "Unable to fetch the live USD/PHP rate.");
       });
@@ -835,6 +847,7 @@
         hydrateExchangeRateForm();
         renderExchangeRateSummary();
         renderDepositEstimate();
+        syncExpenseUsdAmount();
         await logAdminAction("exchange_rate.updated", "exchange_rates", null, {
           quote_currency: payload.quote_currency,
           live_rate: payload.live_rate,
@@ -880,6 +893,126 @@
         await loadAdminRoles();
       });
     });
+  }
+
+  function bindExpenseForm() {
+    if (adminExpenseClear) {
+      adminExpenseClear.addEventListener("click", () => {
+        clearExpenseForm();
+        setStatus("Expense form cleared.", "ok");
+      });
+    }
+
+    [expenseAmountInput, expenseCurrencySelect].forEach((control) => {
+      if (!control) return;
+      control.addEventListener("input", syncExpenseUsdAmount);
+      control.addEventListener("change", syncExpenseUsdAmount);
+    });
+
+    if (!adminExpenseForm) return;
+    clearExpenseForm();
+
+    adminExpenseForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!requireAdminWrite()) return;
+
+      await withButtonLoading(event.submitter, "Saving...", async () => {
+        const form = new FormData(adminExpenseForm);
+        const amount = Number(form.get("amount") || 0);
+        const currency = String(form.get("currency") || "USD");
+        const usdAmount = Number(form.get("usd_amount") || calculateExpenseUsdAmount(amount, currency));
+        const description = String(form.get("description") || "").trim();
+
+        if (!description || !amount || amount <= 0 || !usdAmount || usdAmount <= 0) {
+          setStatus("Enter a valid expense description, amount, and USD equivalent.", "warn");
+          return;
+        }
+
+        const payload = {
+          expense_date: String(form.get("expense_date") || todayInputValue()),
+          category: String(form.get("category") || "other"),
+          description,
+          vendor: String(form.get("vendor") || "").trim() || null,
+          payment_method: String(form.get("payment_method") || "").trim() || null,
+          amount: roundMoney(amount),
+          currency,
+          usd_amount: roundMoney(usdAmount),
+          status: String(form.get("status") || "approved"),
+          receipt_url: String(form.get("receipt_url") || "").trim() || null,
+          notes: String(form.get("notes") || "").trim() || null,
+          updated_by: currentUser.id,
+        };
+        const id = String(form.get("id") || "").trim();
+        if (!id) payload.created_by = currentUser.id;
+
+        const query = id
+          ? client.from("expenses").update(payload).eq("id", id).select("*").single()
+          : client.from("expenses").insert(payload).select("*").single();
+        const { data, error } = await query;
+
+        if (error) {
+          setStatus(error.message, "warn");
+          return;
+        }
+
+        await logAdminAction(id ? "expense.updated" : "expense.created", "expenses", data.id, {
+          category: payload.category,
+          status: payload.status,
+          usd_amount: payload.usd_amount,
+        });
+        clearExpenseForm();
+        setStatus(id ? "Expense updated." : "Expense saved.", "ok");
+        await loadAdminData();
+      });
+    });
+  }
+
+  function syncExpenseUsdAmount() {
+    if (!expenseUsdInput) return;
+    const amount = Number(expenseAmountInput?.value || 0);
+    const currency = expenseCurrencySelect?.value || "USD";
+    const usdAmount = calculateExpenseUsdAmount(amount, currency);
+    expenseUsdInput.value = usdAmount ? String(usdAmount) : "";
+
+    if (expenseRateNote) {
+      expenseRateNote.textContent = currency === "PHP"
+        ? `PHP expense uses platform rate ${formatRate(getPlatformRate())} PHP per USD. Adjust USD equivalent if needed.`
+        : `${currency} expense is treated as 1:1 with USD. Adjust USD equivalent if needed.`;
+    }
+  }
+
+  function calculateExpenseUsdAmount(amount, currency) {
+    const value = Number(amount || 0);
+    if (!value || value <= 0) return 0;
+    if (currency === "PHP") return roundMoney(value / getPlatformRate());
+    return roundMoney(value);
+  }
+
+  function hydrateExpenseForm(expense) {
+    if (!adminExpenseForm || !expense) return;
+    adminExpenseForm.elements.id.value = expense.id || "";
+    adminExpenseForm.elements.expense_date.value = expense.expense_date || todayInputValue();
+    adminExpenseForm.elements.category.value = expense.category || "other";
+    adminExpenseForm.elements.description.value = expense.description || "";
+    adminExpenseForm.elements.vendor.value = expense.vendor || "";
+    adminExpenseForm.elements.payment_method.value = expense.payment_method || "";
+    adminExpenseForm.elements.amount.value = expense.amount || "";
+    adminExpenseForm.elements.currency.value = expense.currency || "USD";
+    adminExpenseForm.elements.usd_amount.value = expense.usd_amount || "";
+    adminExpenseForm.elements.status.value = expense.status || "approved";
+    adminExpenseForm.elements.receipt_url.value = expense.receipt_url || "";
+    adminExpenseForm.elements.notes.value = expense.notes || "";
+    setStatus("Expense loaded for editing.", "ok");
+    goToTab("admin-expenses");
+  }
+
+  function clearExpenseForm() {
+    if (!adminExpenseForm) return;
+    adminExpenseForm.reset();
+    adminExpenseForm.elements.id.value = "";
+    adminExpenseForm.elements.expense_date.value = todayInputValue();
+    adminExpenseForm.elements.status.value = "approved";
+    syncExpenseUsdAmount();
   }
 
   async function ensureProfile(user) {
@@ -973,6 +1106,7 @@
     hydrateExchangeRateForm();
     renderExchangeRateSummary();
     renderDepositEstimate();
+    syncExpenseUsdAmount();
     return exchangeRateCache;
   }
 
@@ -1512,7 +1646,7 @@
         .limit(80)
       : Promise.resolve({ data: [], error: null });
 
-    const [products, plans, paymentMethods, payments, deposits, walletTransactions, referrals, commissionRequests, supportTickets, subscriptions, orders, profiles, notifications, roles, exchangeRates, auditLogs, landingCreatives] = await Promise.all([
+    const [products, plans, paymentMethods, payments, deposits, walletTransactions, expenses, referrals, commissionRequests, supportTickets, subscriptions, orders, profiles, notifications, roles, exchangeRates, auditLogs, landingCreatives] = await Promise.all([
       client.from("products").select("*").order("sort_order", { ascending: true }),
       client.from("plans").select("*,products(name,code)").order("created_at", { ascending: false }),
       client.from("payment_methods").select("*").order("sort_order", { ascending: true }),
@@ -1520,27 +1654,33 @@
         .from("payments")
         .select("*,payment_methods(name,network),orders(id,status,total_amount,currency,plan_id,plans(name,duration_days,bonus_days,product_id,products(name))),profiles!payments_client_id_fkey(full_name,email,telegram_username)")
         .order("created_at", { ascending: false })
-        .limit(30),
+        .limit(1000),
       client
         .from("deposit_requests")
         .select("*,payment_methods(name,network),profiles!deposit_requests_client_id_fkey(full_name,email,telegram_username)")
         .order("created_at", { ascending: false })
-        .limit(30),
+        .limit(1000),
       client
         .from("wallet_transactions")
         .select("*,profiles!wallet_transactions_client_id_fkey(full_name,email)")
         .order("created_at", { ascending: false })
-        .limit(50),
+        .limit(1000),
+      client
+        .from("expenses")
+        .select("*,creator:profiles!expenses_created_by_fkey(full_name,email),updater:profiles!expenses_updated_by_fkey(full_name,email)")
+        .order("expense_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1000),
       client
         .from("referrals")
         .select("id,referrer_id,referred_client_id,order_id,commission_amount,commission_status,created_at,referrer:profiles!referrals_referrer_id_fkey(full_name,email,referral_code),referred:profiles!referrals_referred_client_id_fkey(full_name,email),orders(total_amount,currency)")
         .order("created_at", { ascending: false })
-        .limit(30),
+        .limit(1000),
       client
         .from("commission_requests")
         .select("id,client_id,amount,status,payout_method,payout_details,created_at,profiles!commission_requests_client_id_fkey(full_name,email,telegram_username)")
         .order("created_at", { ascending: false })
-        .limit(30),
+        .limit(1000),
       client
         .from("support_tickets")
         .select("id,client_id,subject,message,status,created_at,updated_at,profiles!support_tickets_client_id_fkey(full_name,email,telegram_username),support_replies(id,author_id,message,is_admin_reply,created_at)")
@@ -1550,18 +1690,18 @@
         .from("subscriptions")
         .select("id,client_id,status,starts_at,expires_at,created_at,products(name),plans(name),profiles!subscriptions_client_id_fkey(full_name,email)")
         .order("created_at", { ascending: false })
-        .limit(100),
+        .limit(1000),
       client
         .from("orders")
         .select("id,client_id,status,total_amount,currency,created_at,plans(name,products(name)),profiles!orders_client_id_fkey(full_name,email)")
         .order("created_at", { ascending: false })
-        .limit(100),
+        .limit(1000),
       client
         .from("profiles")
         .select("id,full_name,email,telegram_username,role,created_at,referral_code,wallet_balance")
         .eq("role", "client")
         .order("created_at", { ascending: false })
-        .limit(100),
+        .limit(1000),
       client
         .from("notifications")
         .select("*,recipient:profiles!notifications_recipient_id_fkey(full_name,email)")
@@ -1573,8 +1713,8 @@
       landingRequest,
     ]);
 
-    if (products.error || plans.error || paymentMethods.error || payments.error || deposits.error || walletTransactions.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error || profiles.error || notifications.error || roles.error || exchangeRates.error || auditLogs.error || landingCreatives.error) {
-      setStatus(products.error?.message || plans.error?.message || paymentMethods.error?.message || payments.error?.message || deposits.error?.message || walletTransactions.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message || profiles.error?.message || notifications.error?.message || roles.error?.message || exchangeRates.error?.message || auditLogs.error?.message || landingCreatives.error?.message, "warn");
+    if (products.error || plans.error || paymentMethods.error || payments.error || deposits.error || walletTransactions.error || expenses.error || referrals.error || commissionRequests.error || supportTickets.error || subscriptions.error || orders.error || profiles.error || notifications.error || roles.error || exchangeRates.error || auditLogs.error || landingCreatives.error) {
+      setStatus(products.error?.message || plans.error?.message || paymentMethods.error?.message || payments.error?.message || deposits.error?.message || walletTransactions.error?.message || expenses.error?.message || referrals.error?.message || commissionRequests.error?.message || supportTickets.error?.message || subscriptions.error?.message || orders.error?.message || profiles.error?.message || notifications.error?.message || roles.error?.message || exchangeRates.error?.message || auditLogs.error?.message || landingCreatives.error?.message, "warn");
       return;
     }
 
@@ -1588,6 +1728,7 @@
     renderListElement(adminPlansList, plans.data, renderAdminPlanRow, "No plans yet.");
     renderListElement(adminPaymentMethodsList, paymentMethods.data, renderAdminPaymentMethodRow, "No payment methods yet.");
     renderAdminDepositQueue(deposits.data || [], walletTransactions.data || []);
+    renderListElement(adminExpensesList, expenses.data, renderAdminExpenseRow, "No expenses recorded yet.");
     renderListElement(adminReferralList, referrals.data, renderAdminReferralRow, "No referral records yet.");
     renderListElement(adminCommissionQueue, commissionRequests.data, renderCommissionReviewCard, "No withdrawal requests yet.");
     const dataSnapshot = {
@@ -1597,6 +1738,7 @@
       payments: payments.data || [],
       deposits: deposits.data || [],
       walletTransactions: walletTransactions.data || [],
+      expenses: expenses.data || [],
       referrals: referrals.data || [],
       commissionRequests: commissionRequests.data || [],
       supportTickets: supportTickets.data || [],
@@ -1627,6 +1769,7 @@
     bindAdminPaymentMethodActions();
     bindAdminCommissionActions();
     bindAdminSupportActions();
+    bindAdminExpenseActions();
     adminReportSnapshot = dataSnapshot;
     adminClientSnapshot = dataSnapshot;
     renderAdminReports(adminReportSnapshot);
@@ -1642,7 +1785,7 @@
     const pendingCredit = reviewable.reduce((sum, deposit) => sum + Number(deposit.wallet_credit_amount || deposit.amount || 0), 0);
 
     setText("[data-admin-deposit-review-count]", String(reviewable.length));
-    setText("[data-admin-deposit-review-usd]", formatMoney(pendingCredit, "USD"));
+    setText("[data-admin-deposit-review-usd]", formatReportMoney(pendingCredit, "USD"));
     setText("[data-admin-deposit-approved-count]", String(deposits.filter((deposit) => deposit.status === "approved").length));
 
     renderListElement(adminPaymentQueue, orderedDeposits, renderDepositReviewCard, "No deposits in queue.");
@@ -1899,12 +2042,13 @@
     const commissionLiability = filtered.referrals
       .filter((referral) => ["available", "requested", "approved"].includes(referral.commission_status))
       .reduce((sum, referral) => sum + Number(referral.commission_amount || 0), 0);
+    const financialSummary = buildFinancialSummary(filtered);
 
     setText("[data-report-pending-payments]", String(pendingDeposits.length));
     setText("[data-report-active-subscriptions]", String(activeSubscriptions.length));
-    setText("[data-report-approved-revenue]", formatMoney(approvedRevenue, "USD"));
+    setText("[data-report-approved-revenue]", formatReportMoney(approvedRevenue, "USD"));
     setText("[data-report-payments-today]", String(paymentsToday.length));
-    setText("[data-report-pending-revenue]", formatMoney(pendingRevenue, "USD"));
+    setText("[data-report-pending-revenue]", formatReportMoney(pendingRevenue, "USD"));
     setText("[data-report-renewals-due]", String(renewalsDue.length));
 
     renderListElement(
@@ -1918,10 +2062,12 @@
       adminHealthList,
       [
         ["Open support tickets", String(openSupport.length), openSupport.length ? "warn" : "ok"],
-        ["Commission liability", formatMoney(commissionLiability, "USD"), commissionLiability ? "warn" : "ok"],
+        ["Commission liability", formatReportMoney(commissionLiability, "USD"), commissionLiability ? "warn" : "ok"],
+        ["Approved expenses", formatReportMoney(financialSummary.approvedExpenses, "USD"), financialSummary.approvedExpenses ? "warn" : "ok"],
+        ["Net profit", formatReportMoney(financialSummary.netProfit, "USD"), financialSummary.netProfit >= 0 ? "ok" : "rejected"],
         ["Approved deposits", String(filtered.deposits.filter((deposit) => deposit.status === "approved").length), "ok"],
-        ["PHP deposits", formatMoney(sumDepositsByCurrency(filtered.deposits, "PHP"), "PHP"), "warn"],
-        ["USDT deposits", formatMoney(sumDepositsByCurrency(filtered.deposits, "USDT"), "USD"), "ok"],
+        ["PHP deposits", formatReportMoney(sumDepositsByCurrency(filtered.deposits, "PHP"), "PHP"), "warn"],
+        ["USDT deposits", formatReportMoney(sumDepositsByCurrency(filtered.deposits, "USDT"), "USD"), "ok"],
       ],
       renderMetricRow,
       "No operations metrics yet."
@@ -1933,6 +2079,9 @@
       renderMetricRow,
       "No wallet sales yet."
     );
+
+    renderFinancialStatement(financialSummary);
+    renderWalletReconciliation(financialSummary);
 
     renderListElement(
       reportDepositsList,
@@ -1954,6 +2103,81 @@
       renderReportReferralRow,
       "No referrals match these filters."
     );
+
+    renderListElement(
+      reportExpensesList,
+      filtered.expenses.slice(0, 12),
+      renderReportExpenseRow,
+      "No expenses match these filters."
+    );
+  }
+
+  function buildFinancialSummary(snapshot) {
+    const approvedPayments = snapshot.payments.filter((payment) => payment.status === "approved");
+    const approvedDeposits = snapshot.deposits.filter((deposit) => deposit.status === "approved");
+    const pendingDeposits = snapshot.deposits.filter((deposit) => ["pending", "under_review"].includes(deposit.status));
+    const approvedExpenses = snapshot.expenses.filter((expense) => expense.status === "approved");
+    const recognizedCommissions = snapshot.referrals.filter((referral) => ["available", "requested", "approved", "paid"].includes(referral.commission_status));
+    const walletCredits = snapshot.walletTransactions.filter((transaction) => transaction.direction === "credit");
+    const walletDebits = snapshot.walletTransactions.filter((transaction) => transaction.direction === "debit");
+
+    const grossRevenue = sumNumber(approvedPayments, "amount");
+    const referralCommissions = sumNumber(recognizedCommissions, "commission_amount");
+    const expenseTotal = sumNumber(approvedExpenses, "usd_amount");
+    const netProfit = roundMoney(grossRevenue - referralCommissions - expenseTotal);
+    const walletCreditTotal = sumNumber(walletCredits, "amount");
+    const walletDebitTotal = sumNumber(walletDebits, "amount");
+    const loadedWalletBalance = sumNumber(snapshot.profiles, "wallet_balance");
+    const expectedWalletBalance = roundMoney(walletCreditTotal - walletDebitTotal);
+
+    return {
+      grossRevenue,
+      approvedDeposits: sumNumber(approvedDeposits, "wallet_credit_amount", "amount"),
+      pendingDeposits: sumNumber(pendingDeposits, "wallet_credit_amount", "amount"),
+      referralCommissions,
+      approvedExpenses: expenseTotal,
+      netProfit,
+      walletCreditTotal,
+      walletDebitTotal,
+      expectedWalletBalance,
+      loadedWalletBalance,
+      walletVariance: roundMoney(expectedWalletBalance - loadedWalletBalance),
+      approvedExpenseCount: approvedExpenses.length,
+      commissionCount: recognizedCommissions.length,
+    };
+  }
+
+  function renderFinancialStatement(summary) {
+    if (!reportFinancialStatement) return;
+    const rows = [
+      ["Gross revenue", formatReportMoney(summary.grossRevenue, "USD"), "Approved wallet purchases", "ok"],
+      ["Less referral commissions", formatReportMoney(summary.referralCommissions, "USD"), `${summary.commissionCount} recognized commission records`, summary.referralCommissions ? "warn" : ""],
+      ["Less approved expenses", formatReportMoney(summary.approvedExpenses, "USD"), `${summary.approvedExpenseCount} approved expense records`, summary.approvedExpenses ? "warn" : ""],
+      ["Net profit", formatReportMoney(summary.netProfit, "USD"), "Revenue minus commissions and expenses", summary.netProfit >= 0 ? "ok" : "rejected"],
+    ];
+    reportFinancialStatement.innerHTML = rows.map(renderStatementRow).join("");
+  }
+
+  function renderWalletReconciliation(summary) {
+    if (!reportWalletReconciliation) return;
+    const rows = [
+      ["Approved deposits", formatReportMoney(summary.approvedDeposits, "USD"), "Client top-ups credited to wallets", "ok"],
+      ["Pending deposits", formatReportMoney(summary.pendingDeposits, "USD"), "Awaiting admin verification", summary.pendingDeposits ? "warn" : ""],
+      ["Wallet credits", formatReportMoney(summary.walletCreditTotal, "USD"), "Credits from deposits or adjustments", "ok"],
+      ["Wallet debits", formatReportMoney(summary.walletDebitTotal, "USD"), "Purchases and deductions", summary.walletDebitTotal ? "warn" : ""],
+      ["Loaded client balances", formatReportMoney(summary.loadedWalletBalance, "USD"), "Current balances from loaded profiles", ""],
+      ["Ledger variance", formatReportMoney(summary.walletVariance, "USD"), "Expected balance minus loaded balances", summary.walletVariance === 0 ? "ok" : "warn"],
+    ];
+    reportWalletReconciliation.innerHTML = rows.map(renderStatementRow).join("");
+  }
+
+  function renderStatementRow([label, value, note, tone]) {
+    return `
+      <div class="row statement-row">
+        <span>${escapeHtml(label)} <small>${escapeHtml(note)}</small></span>
+        <b class="${escapeHtml(tone || "")}">${escapeHtml(value)}</b>
+      </div>
+    `;
   }
 
   function hydrateReportMethodFilter(methods) {
@@ -1987,6 +2211,8 @@
       referrals: snapshot.referrals.filter((item) => dateFilter(item) && statusFilter(item) && searchFilter(item)),
       commissionRequests: snapshot.commissionRequests.filter((item) => dateFilter(item) && statusFilter(item) && searchFilter(item)),
       supportTickets: snapshot.supportTickets.filter((item) => dateFilter(item) && statusFilter(item) && searchFilter(item)),
+      expenses: snapshot.expenses.filter((item) => isWithinReportRange(item.expense_date || item.created_at, range) && statusFilter(item) && searchFilter(item)),
+      walletTransactions: snapshot.walletTransactions.filter((item) => dateFilter(item) && searchFilter(item)),
     };
   }
 
@@ -2004,6 +2230,12 @@
     return [
       item.transaction_reference,
       item.method,
+      item.type,
+      item.direction,
+      item.description,
+      item.category,
+      item.vendor,
+      item.payment_method,
       item.status,
       item.commission_status,
       item.payment_methods?.name,
@@ -2025,6 +2257,13 @@
     return deposits
       .filter((deposit) => (deposit.paid_currency || deposit.currency || "USD") === currency)
       .reduce((sum, deposit) => sum + Number(deposit.paid_amount || deposit.amount || 0), 0);
+  }
+
+  function sumNumber(rows, primaryKey, fallbackKey) {
+    return roundMoney((rows || []).reduce((sum, row) => {
+      const value = row?.[primaryKey] ?? (fallbackKey ? row?.[fallbackKey] : 0);
+      return sum + Number(value || 0);
+    }, 0));
   }
 
   function getFilteredReportSnapshot() {
@@ -2062,6 +2301,16 @@
     `;
   }
 
+  function renderReportExpenseRow(expense) {
+    const original = formatReportMoney(Number(expense.amount || 0), expense.currency || "USD");
+    return `
+      <div class="row report-row">
+        <span>${escapeHtml(expense.description || "Expense")} <small>${escapeHtml(formatStatus(expense.category))} / ${escapeHtml(expense.vendor || "No vendor")} / ${escapeHtml(original)} / ${escapeHtml(formatDate(expense.expense_date))}</small></span>
+        <b class="${statusClass(expense.status)}">${escapeHtml(formatReportMoney(Number(expense.usd_amount || 0), "USD"))}</b>
+      </div>
+    `;
+  }
+
   function bindReportExports() {
     reportExportButtons.forEach((button) => {
       button.addEventListener("click", () => {
@@ -2090,6 +2339,43 @@
   }
 
   function buildExportRows(type, snapshot) {
+    if (type === "financial") {
+      const summary = buildFinancialSummary(snapshot);
+      return [
+        ["Metric", "Amount USD", "Notes"],
+        ["Gross revenue", summary.grossRevenue, "Approved wallet purchases"],
+        ["Referral commissions", summary.referralCommissions, "Recognized commission records"],
+        ["Approved expenses", summary.approvedExpenses, "Approved expenses ledger"],
+        ["Net profit", summary.netProfit, "Revenue minus commissions and expenses"],
+        ["Approved deposits", summary.approvedDeposits, "Wallet top-ups credited"],
+        ["Pending deposits", summary.pendingDeposits, "Awaiting review"],
+        ["Wallet credits", summary.walletCreditTotal, "Ledger credits"],
+        ["Wallet debits", summary.walletDebitTotal, "Ledger debits"],
+        ["Loaded client balances", summary.loadedWalletBalance, "Current loaded profile balances"],
+        ["Ledger variance", summary.walletVariance, "Expected balance minus loaded balances"],
+      ];
+    }
+
+    if (type === "expenses") {
+      return [
+        ["Date", "Category", "Description", "Vendor", "Payment Method", "Amount", "Currency", "USD Amount", "Status", "Receipt URL", "Notes", "Created At"],
+        ...snapshot.expenses.map((expense) => [
+          expense.expense_date || "",
+          expense.category || "",
+          expense.description || "",
+          expense.vendor || "",
+          expense.payment_method || "",
+          expense.amount || 0,
+          expense.currency || "USD",
+          expense.usd_amount || 0,
+          expense.status || "",
+          expense.receipt_url || "",
+          expense.notes || "",
+          expense.created_at || "",
+        ]),
+      ];
+    }
+
     if (type === "payments") {
       return [
         ["Client", "Paid Amount", "Paid Currency", "Exchange Rate", "Markup", "Platform Rate", "USD Credit", "Status", "Method", "Reference", "Created At"],
@@ -2508,6 +2794,51 @@
     return `<div class="row"><span>${escapeHtml(label)}</span><b class="${escapeHtml(tone || "")}">${escapeHtml(value)}</b></div>`;
   }
 
+  function renderAdminExpenseRow(expense) {
+    const canWrite = hasAdminWriteAccess();
+    const nextStatus = expense.status === "approved" ? "voided" : "approved";
+    const statusAction = canWrite
+      ? `<button class="secondary-btn" type="button" data-expense-status="${escapeHtml(nextStatus)}" data-expense-id="${escapeHtml(expense.id)}">${escapeHtml(formatStatus(nextStatus))}</button>`
+      : `<span class="warn">View only</span>`;
+    const receipt = expense.receipt_url
+      ? `<a href="${escapeHtml(expense.receipt_url)}" target="_blank" rel="noopener">Receipt</a>`
+      : "";
+
+    return `
+      <div class="approval-card expense-row" data-expense-row="${escapeHtml(expense.id)}">
+        <div>
+          <strong>${escapeHtml(expense.description)}</strong>
+          <p>${escapeHtml(formatStatus(expense.category))} / ${escapeHtml(formatDate(expense.expense_date))}</p>
+          <p>${escapeHtml(expense.vendor || "No vendor")} / ${escapeHtml(expense.payment_method || "No method")}</p>
+          ${expense.notes ? `<p>${escapeHtml(expense.notes)}</p>` : ""}
+          ${receipt}
+        </div>
+        <span class="${statusClass(expense.status)}">${escapeHtml(formatStatus(expense.status))}</span>
+        <b>${escapeHtml(formatReportMoney(Number(expense.usd_amount || 0), "USD"))}</b>
+        ${canWrite ? `<button class="secondary-btn" type="button" data-edit-expense="${escapeHtml(expense.id)}">Edit</button>` : ""}
+        ${statusAction}
+      </div>
+    `;
+  }
+
+  function bindAdminExpenseActions() {
+    document.querySelectorAll("[data-edit-expense], [data-expense-status]").forEach((button) => {
+      if (button.dataset.bound === "true") return;
+      button.dataset.bound = "true";
+      button.addEventListener("click", async () => {
+        if (!requireAdminWrite()) return;
+
+        if (button.hasAttribute("data-edit-expense")) {
+          const expense = adminReportSnapshot?.expenses?.find((item) => item.id === button.dataset.editExpense);
+          hydrateExpenseForm(expense);
+          return;
+        }
+
+        await withButtonLoading(button, "Updating...", () => updateExpenseStatus(button.dataset.expenseId, button.dataset.expenseStatus));
+      });
+    });
+  }
+
   function bindAdminCommissionActions() {
     document.querySelectorAll("[data-admin-commission-approve], [data-admin-commission-reject]").forEach((button) => {
       if (button.dataset.bound === "true") return;
@@ -2744,6 +3075,22 @@
     setStatus(`${table.slice(0, -1)} marked as ${status}.`, "ok");
     await loadAdminData();
     await loadPlans();
+  }
+
+  async function updateExpenseStatus(id, status) {
+    const { error } = await client
+      .from("expenses")
+      .update({ status, updated_by: currentUser.id })
+      .eq("id", id);
+
+    if (error) {
+      setStatus(error.message, "warn");
+      return;
+    }
+
+    await logAdminAction(`expense.${status}`, "expenses", id, { status });
+    setStatus(`Expense marked as ${formatStatus(status)}.`, "ok");
+    await loadAdminData();
   }
 
   async function approveDeposit(depositId) {
@@ -3378,7 +3725,7 @@
 
   function statusClass(status) {
     if (["approved", "active", "trial", "available", "paid", "resolved", "closed"].includes(status)) return "ok";
-    if (["rejected", "cancelled", "expired"].includes(status)) return "rejected";
+    if (["rejected", "cancelled", "expired", "voided"].includes(status)) return "rejected";
     return "warn";
   }
 
@@ -3745,8 +4092,27 @@
   }
 
   function formatMoney(amount, currency) {
-    if (Number(amount) === 0) return "Free";
-    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
+    return formatCurrencyValue(amount, currency, true);
+  }
+
+  function formatReportMoney(amount, currency) {
+    return formatCurrencyValue(amount, currency, false);
+  }
+
+  function formatCurrencyValue(amount, currency, zeroAsFree) {
+    const value = Number(amount || 0);
+    const code = String(currency || "USD").toUpperCase();
+    if (zeroAsFree && value === 0) return "Free";
+
+    if (code === "USDT") {
+      return `${new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)} USDT`;
+    }
+
+    try {
+      return new Intl.NumberFormat("en-US", { style: "currency", currency: code }).format(value);
+    } catch (error) {
+      return `${new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)} ${code}`;
+    }
   }
 
   function roundMoney(amount) {
@@ -3771,6 +4137,12 @@
 
   function formatDateTime(value) {
     return value ? new Date(value).toLocaleString() : "Just now";
+  }
+
+  function todayInputValue() {
+    const today = new Date();
+    const localDate = new Date(today.getTime() - today.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 10);
   }
 
   function shortId(value) {
