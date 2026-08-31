@@ -4,6 +4,8 @@
 
 - Admin UI is noindex/nofollow.
 - Cloudflare Pages security headers are defined in `_headers`.
+- Client/admin HTML routes use `Cache-Control: no-store` to avoid stale authenticated UI.
+- JS/CSS assets use short revalidation caching; static assets use longer caching.
 - Supabase frontend uses a publishable key, not a service-role key.
 - RLS is enabled on all public tables.
 - Anonymous table access is restricted to public `products` and `plans`.
@@ -36,3 +38,4 @@
 - Keep email confirmation enabled unless the business intentionally wants instant signup.
 - Rotate publishable keys if they were shared outside the repo workflow.
 - Test real client signup, proof upload, admin approval, subscription activation, referral commission, withdrawal, and support tickets.
+- See `docs/module-39-production-settings.md` before the final launch QA pass.

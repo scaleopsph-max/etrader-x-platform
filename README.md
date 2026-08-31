@@ -22,6 +22,7 @@ Premium landing page and MVP framework for the ETrader-X trading products platfo
 - Least-privilege public table grants for Supabase Data API access
 - Full mobile overflow QA pass for client/admin portal tabs
 - Admin UX feedback polish for save/update/approval actions
+- Production settings pass for Cloudflare headers, cache rules, and Supabase launch checks
 
 ## Planned Stack
 
@@ -55,6 +56,7 @@ Imported landing assets live under `assets/`. Public CTAs are connected to the E
 - Mobile-first portal polish
 - Supabase RLS and grants hardening
 - Admin action feedback and responsive operations polish
+- Production settings and launch readiness checks
 
 ## Database Framework
 
@@ -66,3 +68,4 @@ PAM FAQ knowledge is managed in `pam_faq_entries` with public active reads and a
 Module 36 tightened table/function grants so RLS remains backed by least-privilege Data API access.
 See `docs/database-framework.md` for the table map and security model.
 See `docs/production-security.md` for the pre-launch hardening checklist.
+See `docs/module-39-production-settings.md` for Cloudflare and Supabase production settings.
