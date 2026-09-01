@@ -24,6 +24,7 @@ Premium landing page and MVP framework for the ETrader-X trading products platfo
 - Admin UX feedback polish for save/update/approval actions
 - Production settings pass for Cloudflare headers, cache rules, and Supabase launch checks
 - Final launch QA pass with Supabase performance fixes and mobile layout automation
+- Real-account UAT launch gate with auth profile safety net and wallet reconciliation fixes
 
 ## Planned Stack
 
@@ -75,3 +76,4 @@ See `docs/module-40-client-guide.md` for the client portal guide.
 See `docs/module-40-launch-sop.md` for launch SOP and incident handling.
 See `docs/module-20-22-uat-checklist.md` for the current wallet-only UAT checklist.
 See `docs/module-41-final-launch-qa.md` for the final launch QA report.
+See `docs/module-42-real-account-uat-launch-gate.md` for the real-account UAT launch gate.
