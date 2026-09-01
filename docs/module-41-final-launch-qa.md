@@ -10,6 +10,8 @@ Run date: 2026-09-01
 - Mobile layout QA for client and admin portals
 - Production readiness documentation check
 
+This is an automated and pre-authenticated launch QA pass. Real-account UAT still needs to be run with live client and admin credentials using the checklist in `docs/module-20-22-uat-checklist.md`.
+
 ## Code QA
 
 - `etx-auth.js` syntax check passed.
@@ -87,4 +89,4 @@ Run date: 2026-09-01
 
 ## Result
 
-Module 41 is production-ready after the Supabase performance fix, static QA, live route smoke, REST smoke, and mobile layout QA.
+Module 41 automated launch QA is ready after the Supabase performance fix, static QA, live route smoke, REST smoke, and mobile layout QA. The remaining launch gate is real-account UAT for signup, login, deposit upload, admin approval, wallet purchase, referral commission, and support flow.
