@@ -22,6 +22,7 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }
 
 body {
@@ -33,6 +34,7 @@ body {
   color: var(--ink);
   font-family: Inter, Arial, sans-serif;
   letter-spacing: 0;
+  overflow-x: hidden;
 }
 
 body::before {
@@ -627,6 +629,72 @@ h3 {
 .sidebar-account strong {
   margin-bottom: 0;
   overflow-wrap: anywhere;
+}
+
+@media (max-width: 1180px) {
+  .admin-portal {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    width: min(100% - 24px, 1400px);
+    padding-top: 12px;
+  }
+
+  .admin-sidebar {
+    position: sticky;
+    top: 78px;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 10px;
+    scrollbar-width: thin;
+  }
+
+  .admin-sidebar > strong {
+    display: none;
+  }
+
+  .admin-sidebar button {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 44px;
+    margin-bottom: 0;
+    white-space: nowrap;
+  }
+
+  .admin-sidebar .sidebar-account {
+    flex: 0 0 min(280px, 74vw);
+    align-items: center;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    margin-top: 0;
+    border-top: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 0;
+    padding-left: 10px;
+  }
+
+  .admin-sidebar .sidebar-account small {
+    display: none;
+  }
+
+  .admin-sidebar .sidebar-account strong {
+    max-width: 132px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .admin-sidebar .sidebar-account .secondary-btn {
+    width: auto;
+    min-height: 44px;
+    white-space: nowrap;
+  }
 }
 
 .page-heading {

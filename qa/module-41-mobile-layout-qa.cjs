@@ -89,6 +89,77 @@ async function checkOverflow(page, label) {
   }, label);
 }
 
+async function checkPortalLayout(page, label, kind, viewport) {
+  return page.evaluate(
+    ({ label, kind, width }) => {
+      const shell = document.querySelector(kind === "client" ? "[data-client-app-shell]" : "[data-admin-shell]");
+      const sidebar = shell?.querySelector(".portal-sidebar");
+      const workspace = shell?.querySelector(".portal-workspace");
+      if (!shell || !sidebar || !workspace || shell.classList.contains("hidden")) {
+        return {
+          label,
+          width,
+          hasLayoutFailure: false,
+          failures: [],
+        };
+      }
+
+      const shellRect = shell.getBoundingClientRect();
+      const sidebarRect = sidebar.getBoundingClientRect();
+      const workspaceRect = workspace.getBoundingClientRect();
+      const failures = [];
+
+      if (shellRect.left < -1 || shellRect.right > window.innerWidth + 1) {
+        failures.push("portal shell exceeds viewport");
+      }
+
+      if (sidebarRect.left < -1 || sidebarRect.right > window.innerWidth + 1) {
+        failures.push("sidebar container exceeds viewport");
+      }
+
+      if (workspaceRect.left < -1 || workspaceRect.right > window.innerWidth + 1) {
+        failures.push("workspace exceeds viewport");
+      }
+
+      if (width <= 1180 && kind === "admin" && workspaceRect.top < sidebarRect.bottom - 2) {
+        failures.push("admin workspace should stack below sidebar on tablet/mobile");
+      }
+
+      if (width <= 980 && kind === "client" && workspaceRect.top < sidebarRect.bottom - 2) {
+        failures.push("client workspace should stack below sidebar on mobile");
+      }
+
+      return {
+        label,
+        width,
+        hasLayoutFailure: failures.length > 0,
+        failures,
+        rects: {
+          shell: {
+            left: Math.round(shellRect.left),
+            right: Math.round(shellRect.right),
+            top: Math.round(shellRect.top),
+            bottom: Math.round(shellRect.bottom),
+          },
+          sidebar: {
+            left: Math.round(sidebarRect.left),
+            right: Math.round(sidebarRect.right),
+            top: Math.round(sidebarRect.top),
+            bottom: Math.round(sidebarRect.bottom),
+          },
+          workspace: {
+            left: Math.round(workspaceRect.left),
+            right: Math.round(workspaceRect.right),
+            top: Math.round(workspaceRect.top),
+            bottom: Math.round(workspaceRect.bottom),
+          },
+        },
+      };
+    },
+    { label, kind, width: viewport.width },
+  );
+}
+
 async function runTabChecks(page, tabs, kind, viewport) {
   const results = [];
   for (const tab of tabs) {
@@ -119,12 +190,14 @@ async function runPage(browser, fileName, kind) {
         document.querySelector("[data-client-auth-gate]")?.classList.add("hidden");
         document.querySelector("[data-client-app-shell]")?.classList.remove("hidden");
       });
+      results.push(await checkPortalLayout(page, `${kind} shell layout ${viewport.name}`, kind, viewport));
       results.push(...(await runTabChecks(page, clientTabs, kind, viewport)));
     } else {
       await page.evaluate(() => {
         document.querySelector("[data-admin-auth-gate]")?.classList.add("hidden");
         document.querySelector("[data-admin-shell]")?.classList.remove("hidden");
       });
+      results.push(await checkPortalLayout(page, `${kind} shell layout ${viewport.name}`, kind, viewport));
       results.push(...(await runTabChecks(page, adminTabs, kind, viewport)));
     }
 
@@ -142,7 +215,7 @@ async function runPage(browser, fileName, kind) {
   ];
   await browser.close();
 
-  const failures = results.filter((result) => result.hasHorizontalOverflow);
+  const failures = results.filter((result) => result.hasHorizontalOverflow || result.hasLayoutFailure);
   console.log(JSON.stringify({ totalChecks: results.length, failing: failures.length, failures }, null, 2));
 
   if (failures.length) {
