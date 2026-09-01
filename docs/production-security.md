@@ -13,8 +13,8 @@
 - Public table grants are least-privilege:
   - `anon`: read-only access to public catalog, landing creatives, and active PAM FAQ rows.
   - `authenticated`: only the CRUD verbs required by client/admin workflows.
-- Payment proofs use a private Supabase Storage bucket with MIME and file-size limits.
-- Admin authorization uses `app_metadata.role = admin`, not user-editable metadata.
+- Deposit proofs use a private Supabase Storage bucket with MIME and file-size limits.
+- Admin authorization uses approved operations roles in `app_metadata.role`, not user-editable metadata.
 - Mock client/subscription data was removed from admin UI.
 - Admin login now hides the sidebar and operations workspace until role verification passes.
 - `admin_roles` registry is seeded with SUPER USER, ADMIN, and MANAGER.
@@ -33,9 +33,9 @@
 
 ## Pre-Launch Manual Checks
 
-- Confirm the first real admin user has `app_metadata.role = admin`.
+- Confirm the first real operations owner has `app_metadata.role = super_user`.
 - Confirm which real user accounts should receive `super_user`, `admin`, or `manager` in Supabase Auth app metadata.
 - Keep email confirmation enabled unless the business intentionally wants instant signup.
 - Rotate publishable keys if they were shared outside the repo workflow.
-- Test real client signup, proof upload, admin approval, subscription activation, referral commission, withdrawal, and support tickets.
+- Test real client signup, deposit proof upload, admin deposit approval, wallet crediting, wallet purchase, subscription activation, referral commission, withdrawal, and support tickets.
 - See `docs/module-39-production-settings.md` before the final launch QA pass.

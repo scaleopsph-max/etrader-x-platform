@@ -10,13 +10,13 @@ Premium landing page and MVP framework for the ETrader-X trading products platfo
 - Urgency promo section
 - Product catalog blocks
 - Supabase-powered client auth
-- Client product selection, order creation, and payment-review submission
+- Client wallet deposit, admin top-up approval, and wallet-only product purchase
 - Hidden admin route with Supabase admin role guard
 - Clean admin login gate before the private workspace is shown
 - Seeded operations role registry for SUPER USER, ADMIN, and MANAGER
 - Admin product and plan management
-- Admin payment review with subscription activation
-- Private Supabase Storage bucket for payment proofs
+- Admin deposit review with wallet crediting and subscription activation
+- Private Supabase Storage bucket for deposit proofs
 - Security headers for Cloudflare Pages
 - Restricted anonymous database access for private tables
 - Least-privilege public table grants for Supabase Data API access
@@ -35,15 +35,15 @@ Premium landing page and MVP framework for the ETrader-X trading products platfo
 The public `index.html` is adapted from the teammate landing repository:
 `https://github.com/antigoderiv/ETX-Products`.
 
-Imported landing assets live under `assets/`. Public CTAs are connected to the ETX `client.html` subscription flow.
+Imported landing assets live under `assets/`. Public CTAs are connected to the ETX `/client` portal flow.
 
 ## MVP Modules
 
 - Public landing page
 - Client login/profile/subscription flow
-- Payment proof upload
+- Wallet deposit proof upload
 - Admin product and plan management
-- Admin payment approval
+- Admin deposit approval and wallet crediting
 - Subscription activation
 - Referral and commission tracking
 - Wallet-only deposits with USD balance
@@ -69,3 +69,7 @@ Module 36 tightened table/function grants so RLS remains backed by least-privile
 See `docs/database-framework.md` for the table map and security model.
 See `docs/production-security.md` for the pre-launch hardening checklist.
 See `docs/module-39-production-settings.md` for Cloudflare and Supabase production settings.
+See `docs/module-40-admin-operations-guide.md` for admin daily operations.
+See `docs/module-40-client-guide.md` for the client portal guide.
+See `docs/module-40-launch-sop.md` for launch SOP and incident handling.
+See `docs/module-20-22-uat-checklist.md` for the current wallet-only UAT checklist.
